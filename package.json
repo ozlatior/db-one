@@ -1,0 +1,14 @@
+{
+	"name": "db-one",
+	"version": "0.0.1",
+	"scripts": {
+		"test": "mocha"
+	},
+	"dependencies": {
+		"colors": "*",
+		"mocha": "*",
+		"pg": "*",
+		"pg-promise": "*",
+		"sequelize": "*"
+	}
+}
