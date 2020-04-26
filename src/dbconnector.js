@@ -75,22 +75,34 @@ class DBConnector extends ModelLoader {
 		logger.info("Updating " + model + " entry id = " + id, "updateEntry");
 		logger.detail("  data = " + JSON.stringify(data), "updateEntry");
 		let entity = this.dbCore.getEntity(model);
-		if (entity === undefined)
-			throw new DBError("No such model/entity " + model);
-		throw new DBError("Not implemented");
+		return new Promise((resolve, reject) => {
+			if (entity === undefined)
+				throw new DBError("No such model/entity " + model);
+			entity.update(data, { where: { id : id } }).then((result) => {
+				resolve(result.dataValues);
+			}).catch(reject);
+		});
 	}
 
 	deleteEntry (model, id) {
 		logger.info("Deleting " + model + " entry id = " + id, "deleteEntry");
 		let entity = this.dbCore.getEntity(model);
-		if (entity === undefined)
-			throw new DBError("No such model/entity " + model);
-		throw new DBError("Not implemented");
+		return new Promise((resolve, reject) => {
+			if (entity === undefined)
+				throw new DBError("No such model/entity " + model);
+			entity.destroy({ where: { id: id } }).then((result) => {
+				if (result === 0)
+					logger.warn("Entry not found for deletion (id = " + id + ")", "deleteEntry");
+				resolve(result === 1);
+			}).catch(reject);
+		});
 	}
 
-	associateEntry (model, id, target, targetId) {
-		logger.info("Associating " + model + " entry id = " + id + " and " + target + " entry id = " + targetId,
-			"associateEntry");
+	associateEntry (model, id, target, targetId, operation) {
+		if (!operation)
+			operation = "add";
+		logger.info("Association " + operation + " for " + model + " entry id = " + id + " of " +
+			target + " entry id = " + targetId, "associateEntry");
 		let entity = this.dbCore.getEntity(model);
 		let targetEntity = this.dbCore.getEntity(target);
 		return new Promise((resolve, reject) => {
@@ -101,8 +113,28 @@ class DBConnector extends ModelLoader {
 			this.getEntries(model, { id: id }).then((result) => {
 				if (result.length === 0)
 					throw new DBError("No such " + model + " entry " + id);
-				let fn = this.associationFunctionName("add", model, target);
-				result[0][fn](targetId).then(resolve).catch(reject);
+				let plural = false;
+				if (targetId && targetId instanceof Array)
+					plural = true;
+				let fn = this.associationFunctionName(operation, model, target, plural);
+				result[0][fn](targetId).then((result) => {
+					if (result instanceof Array) {
+						let ret = [];
+						result.map((item) => {
+							if (item.dataValues)
+								ret.push(item.dataValues);
+							else
+								ret.push(item);
+						});
+						resolve(ret);
+						return;
+					}
+					if (result && result.dataValues) {
+						resolve(result.dataValues);
+						return;
+					}
+					resolve(result);
+				}).catch(reject);
 			}).catch(reject);
 		});
 	}
