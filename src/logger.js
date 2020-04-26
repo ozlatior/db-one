@@ -4,24 +4,44 @@
 
 const colors = require("colors");
 
+const string = require("util-one").string;
+
 class Logger {
 
 	constructor () {
 		// all possible levels and their output
 		this.levels = {
 			detail: [ "detail".gray ],
+			sql:	[ " PSQL ".cyan, [ "grey" ] ],
 			info:	[ " INFO ".green ],
 			warn:	[ " WARN ".yellow ],
 			error:	[ " ERROR ".red ]
 		};
+		// set default display colors for output
+		this.colors = [];
+		// set default width to stdout width
+		this.consoleWidth = process.stdout.columns;
+		// set default word break characters
+		this.wordBreak = " \t-.";
+		// timestamp regexp
+		this.timestampRegexp = /^[0-9\-.]+[T ][0-9:.]+Z? *\[[^\[\]]+\] ?/g;
 		// currently active level
 		this.level = "detail";
-		// what to use for logging (default: console.log)
-		this.setLogFunction(console.log);
+		// set the log function to default (formatted on stdout with console width)
+		this.resetLogFunction();
 		// generate logging methods for each level
 		this.setupLoggingMethods();
 		// report logger instance
 		this.info("Logger Instance Initialized", "Logger", "db-one");
+	}
+
+	/*
+	 * Set display colors style
+	 */
+	setColors (arr) {
+		if (!arr)
+			this.colors = [];
+		this.colors = arr;
 	}
 
 	/*
@@ -34,12 +54,74 @@ class Logger {
 	}
 
 	/*
+	 * Set the console width to something else
+	 */
+	setConsoleWidth (width) {
+		this.consoleWidth = width;
+	}
+
+	/*
+	 * Get the console width
+	 */
+	getConsoleWidth () {
+		return this.consoleWidth;
+	}
+
+	/*
+	 * Formatted output function using console width
+	 */
+	formattedOutput () {
+
+		let getLastBreak = (str, index, chars) => {
+			if (string.colors.length(str) <= index)
+				return index;
+			while (index > 0 && chars.indexOf(string.colors.charAt(index, str)) === -1) {
+				index--;
+			}
+			return index;
+		};
+
+		let getIndent = (len) => {
+			let ret = new Array(len);
+			ret.fill(" ");
+			return ret.join("");
+		};
+
+		let str = Array.prototype.slice.call(arguments, 0).join(" ");
+		let head = string.colors.remove(str).match(this.timestampRegexp);
+		let indent = getIndent(4);
+		if (head !== null && head.length)
+			indent = getIndent(head[0].length);
+		let rows = [];
+		let index;
+		while (string.colors.length(str) > 0) {
+			if (rows.length > 0)
+				str = indent + str;
+			index = getLastBreak(str, this.consoleWidth-1, this.wordBreak) + 1;
+			let row;
+			row = string.colors.slice(str, indent.length, index);
+			row = string.colors.apply(row, this.colors);
+			row = string.colors.slice(str, 0, indent.length) + row;
+			rows.push(row);
+			str = string.colors.slice(str, index);
+		}
+		console.log(rows.join("\n") + str);
+	}
+
+	/*
 	 * Set the log function (for instance, to console.log)
 	 */
 	setLogFunction (fn) {
 		if (!(fn instanceof Function))
 			throw new Error("Argument is not a function");
 		this.logFunction = fn;
+	}
+
+	/*
+	 * Set the log function to default (formattedOutput)
+	 */
+	resetLogFunction () {
+		this.logFunction = this.formattedOutput.bind(this);
 	}
 
 	/*
@@ -67,17 +149,20 @@ class Logger {
 			this[i] = function(text, cls, service) {
 				if (!this.isActiveLevel(i))
 					return false;
+				let format = this.levels[i][1];
+				if (format === undefined)
+					format = [];
 				// build a string: timestamp [ level ] service.cls: text
 				let str = (new Date()).toISOString();
-				str += " [" + this.levels[i] + "] ";
+				str += " [" + this.levels[i][0] + "] ";
 				let a = [];
 				if (service)
 					a.push(service);
 				if (cls)
 					a.push(cls);
 				if (a.length)
-					str += a.join(".") + ": ";
-				str += text;
+					str += string.colors.apply(a.join(".") + ": ", format);
+				str += string.colors.apply(text, format);
 				this.logFunction(str);
 			};
 		}
