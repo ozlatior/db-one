@@ -9,6 +9,7 @@
 		"mocha": "*",
 		"pg": "*",
 		"pg-promise": "*",
+		"pgsql-parser": "*",
 		"sequelize": "*"
 	}
 }
