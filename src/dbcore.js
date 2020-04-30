@@ -19,6 +19,11 @@ class DBCore {
 		this.associations = {};
 	}
 
+	rawQuery (query) {
+		logger.info("Executing raw query " + query, "rawQuery");
+		return this.sql.query(query);
+	}
+
 	createEntity (name, attributes, options) {
 		logger.info("Creating Entity " + name + ": " + Object.getOwnPropertyNames(attributes).join(", "),
 			"createEntity");
