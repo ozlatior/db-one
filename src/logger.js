@@ -20,7 +20,10 @@ class Logger {
 		// set default display colors for output
 		this.colors = [];
 		// set default width to stdout width
-		this.consoleWidth = process.stdout.columns;
+		if (process && process.stdout && process.stdout.columns)
+			this.consoleWidth = process.stdout.columns;
+		else
+			this.consoleWidth = 260;
 		// set default word break characters
 		this.wordBreak = " \t-.";
 		// timestamp regexp
