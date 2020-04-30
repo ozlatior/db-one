@@ -130,6 +130,20 @@ const TEMPLATES = {
 				resolve(!!result && !!result.id);
 			}).catch(reject);
 		});
+	},
+
+	associationSetReversed: function (__MODELCC__Id, __TARGETCC__Id) {
+		return new Promise((resolve, reject) => {
+			this.dbConnector.associateEntryReversed("__MODEL__", __MODELCC__Id, "__TARGET__", __TARGETCC__Id, "__OP__")
+				.then(resolve).catch(reject);
+		});
+	},
+
+	associationGetReversed: function (__MODELCC__Id) {
+		return new Promise((resolve, reject) => {
+			this.dbConnector.associateEntryReversed("__MODEL__", __MODELCC__Id, "__TARGET__", null, "__OP__")
+				.then(resolve).catch(reject);
+		});
 	}
 
 };
@@ -236,36 +250,42 @@ class DBGenerator extends ModelLoader {
 			__MODELFA__: args[0],
 			__MODELDO__: "{\n" + args.map((item) => { return "\t\t\t\t" + item + ": " + item }).join(",\n") + "\n\t\t\t}"
 		};
+
 		// create entity
 		res = this.processFunctionTemplate(TEMPLATES.create, tokens);
 		fn = this.getFunctionName("create", entity);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "create", entity);
+
 		// create entity by arguments
 		res = this.processFunctionTemplate(TEMPLATES.createByArgs, tokens);
 		fn = this.getFunctionName("create", entity);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "create", entity);
+
 		// retrieve entity
 		res = this.processFunctionTemplate(TEMPLATES.retrieve, tokens);
 		fn = this.getFunctionName("retrieve", entity);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "retrieve", entity);
+
 		// update entity
 		res = this.processFunctionTemplate(TEMPLATES.update, tokens);
 		fn = this.getFunctionName("update", entity);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "update", entity);
+
 		// delete entity
 		res = this.processFunctionTemplate(TEMPLATES.delete, tokens);
 		fn = this.getFunctionName("delete", entity);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "delete", entity);
+
 		// list entities
 		res = this.processFunctionTemplate(TEMPLATES.list, tokens);
 		fn = this.getFunctionName("list", entity);
@@ -284,6 +304,7 @@ class DBGenerator extends ModelLoader {
 			__TARGET__: target,
 			__TARGETCC__: string.changeCase.snakeToCamel(target, true)
 		};
+
 		// set association
 		tokens.__OP__ = "set";
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
@@ -291,6 +312,7 @@ class DBGenerator extends ModelLoader {
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "set", entity, target);
+
 		// get association
 		tokens.__OP__ = "get";
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
@@ -298,18 +320,21 @@ class DBGenerator extends ModelLoader {
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "get", entity, target);
+
 		// unset association
 		res = this.processFunctionTemplate(TEMPLATES.associationUnset, tokens);
 		fn = this.getFunctionName("unset", entity, target);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "set", entity, target);
+
 		// isSet association
 		res = this.processFunctionTemplate(TEMPLATES.associationIsSet, tokens);
 		fn = this.getFunctionName("isSet", entity, target);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "set", entity, target);
+
 		// check that target is associated
 		res = this.processFunctionTemplate(TEMPLATES.associationCompare, tokens);
 		fn = this.getFunctionName("is", entity, target);
@@ -328,6 +353,7 @@ class DBGenerator extends ModelLoader {
 			__TARGET__: target,
 			__TARGETCC__: string.changeCase.snakeToCamel(target, true)
 		};
+
 		// add association
 		tokens.__OP__ = "add";
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
@@ -335,6 +361,7 @@ class DBGenerator extends ModelLoader {
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "add", entity, target);
+
 		// remove association
 		tokens.__OP__ = "remove";
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
@@ -342,6 +369,7 @@ class DBGenerator extends ModelLoader {
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "remove", entity, target);
+
 		// set all associations
 		tokens.__OP__ = "set";
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
@@ -349,13 +377,15 @@ class DBGenerator extends ModelLoader {
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "setMany", entity, target);
+
 		// get all associations
 		tokens.__OP__ = "get";
-		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
+		res = this.processFunctionTemplate(TEMPLATES.associationGet, tokens);
 		fn = this.getFunctionName("getMany", entity, target);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "getMany", entity, target);
+
 		// check that target is associated
 		tokens.__OP__ = "has";
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
@@ -363,9 +393,10 @@ class DBGenerator extends ModelLoader {
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
 		doc.push(fn, res, "has", entity, target);
+
 		// count associated target entities
 		tokens.__OP__ = "count";
-		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
+		res = this.processFunctionTemplate(TEMPLATES.associationGet, tokens);
 		fn = this.getFunctionName("count", entity, target);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
 		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
@@ -380,8 +411,90 @@ class DBGenerator extends ModelLoader {
 			this.attachOneToManyMethods(proto, association.source, association.target, doc);
 	}
 
-	attachReverseAssociationMethods (proto, association) {
+	attachReverseAssociationMethods (proto, association, doc) {
 		logger.info("Attaching reverse association methods for " + JSON.stringify(association), "attachReverseAssociationMethods");
+		let res;
+		let fn;
+		let entity = association.target;
+		let target = association.source;
+		let tokens = {
+			__MODEL__: entity,
+			__MODELCC__: string.changeCase.snakeToCamel(entity, true),
+			__TARGET__: target,
+			__TARGETCC__: string.changeCase.snakeToCamel(target, true)
+		};
+
+		// add association
+		fn = this.getFunctionName("add", entity, target);
+		if (typeof(proto[fn]) === "function")
+			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
+		else {
+			tokens.__OP__ = "add";
+			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
+			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
+			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			doc.push(fn, res, "add", entity, target);
+		}
+
+		// remove association
+		fn = this.getFunctionName("remove", entity, target);
+		if (typeof(proto[fn]) === "function")
+			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
+		else {
+			tokens.__OP__ = "remove";
+			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
+			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
+			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			doc.push(fn, res, "remove", entity, target);
+		}
+
+		// set all associations
+		fn = this.getFunctionName("setMany", entity, target);
+		if (typeof(proto[fn]) === "function")
+			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
+		else {
+			tokens.__OP__ = "set";
+			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
+			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
+			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			doc.push(fn, res, "setMany", entity, target);
+		}
+
+		// get all associations
+		fn = this.getFunctionName("getMany", entity, target);
+		if (typeof(proto[fn]) === "function")
+			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
+		else {
+			tokens.__OP__ = "get";
+			res = this.processFunctionTemplate(TEMPLATES.associationGetReversed, tokens);
+			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
+			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			doc.push(fn, res, "getMany", entity, target);
+		}
+
+		// check that target is associated
+		fn = this.getFunctionName("has", entity, target);
+		if (typeof(proto[fn]) === "function")
+			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
+		else {
+			tokens.__OP__ = "has";
+			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
+			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
+			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			doc.push(fn, res, "has", entity, target);
+		}
+
+		// count associated target entities
+		fn = this.getFunctionName("count", entity, target);
+		if (typeof(proto[fn]) === "function")
+			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
+		else {
+			tokens.__OP__ = "count";
+			res = this.processFunctionTemplate(TEMPLATES.associationGetReversed, tokens);
+			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
+			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			doc.push(fn, res, "count", entity, target);
+		}
 	}
 
 	generateSessionClass (doc) {
@@ -389,6 +502,7 @@ class DBGenerator extends ModelLoader {
 		if (!doc)
 			doc = { push: () => {} };
 		let ret;
+
 		try {
 			vm.runInNewContext("cls = class " + this.className + " extends DBSession {}", this.ctx);
 			ret = this.ctx.cls;
@@ -397,6 +511,7 @@ class DBGenerator extends ModelLoader {
 			logger.error(e);
 			return null;
 		}
+
 		// model CRUD methods
 		for (let i in this.models)
 			this.attachEntityMethods(ret.prototype, i, doc);
@@ -408,6 +523,7 @@ class DBGenerator extends ModelLoader {
 		for (let i in this.associations)
 			for (let j in this.associations[i])
 				this.attachReverseAssociationMethods(ret.prototype, this.associations[i][j], doc);
+
 		return ret;
 	}
 

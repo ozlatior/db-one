@@ -3,6 +3,7 @@
  */
 
 const inflection = require("inflection");
+const string = require("util-one").string;
 
 const logger = require("./logger.js").getInstance().moduleBinding("DBConnector", "db-one");
 
@@ -137,6 +138,178 @@ class DBConnector extends ModelLoader {
 				}).catch(reject);
 			}).catch(reject);
 		});
+	}
+
+	// reverse associations - for reverse associations the target has to be associated to the entity
+	// and we define the following operations
+	// clear = (targets).is(entityId).set(null)
+	// set = clear + add
+	// get = (targets).is(entityId)
+	// add = (targets).where(targetId).set(entityId)
+	// remove = (targets).where(targetId).is(entityId).set(null)
+	// has = (targets).where(targetId).is(entityId) (AND)
+	// count = (targets).is(entityId) (count++)
+	// for one to many associations we can do this using queries on the entity objects in the database
+	// for many to many associations we have to run queries directly on the association table, unless
+	// the user has defined the association both ways, in which case we can simply run the reverse functions
+	// (in that case this code will not be executed, but the one for regular associations)
+	associateEntryReversed (model, id, target, targetId, operation) {
+		logger.info("Association " + operation + " for " + target + " entry id = " + targetId + " of " +
+			model + " entry id = " + id, "associateEntryReversed");
+		if (this.associations[target] === undefined || this.associations[target][model] === undefined)
+			throw new DBError("No reverse association between " + model + " and " + target);
+		let type = this.associations[target][model].type;
+		// normalize targetId
+		if (targetId === null)
+			targetId = [];
+		if (!(targetId instanceof Array))
+			targetId = [ targetId ];
+		// it's a many to many, these are symmetrical so we should be able to just call
+		// the regular function with mirrored arguments
+		if (type === "hasMany" || type === "belongsToMany") {
+			let tableName = this.associations[target][model].through;
+			let sourceCol = string.changeCase.snakeToCamel(model) + "Id";
+			let targetCol = string.changeCase.snakeToCamel(target) + "Id";
+			let targetTableName = inflection.pluralize(target);
+			let query = null;
+			let values;
+			switch (operation) {
+				case "clear":
+					query = "DELETE FROM \"" + tableName + "\" WHERE \"" + sourceCol + "\" = '" + id + "'";
+					break;
+				case "add":
+					if (targetId.length === 0)
+						break;
+					values = targetId.map((item) => "(CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3), '" + id + "', '" + item + "')");
+					values = values.join(", ");
+					query = "INSERT INTO \"" + tableName + "\" (\"createdAt\", \"updatedAt\", \"" + sourceCol + "\", \"" + targetCol + "\") ";
+					query += "VALUES " + values;
+					break;
+				case "remove":
+					if (targetId.length === 0)
+						break;
+					values = targetId.map((item) => "'" + item + "'");
+					values = values.join(", ");
+					query = "DELETE FROM \"" + tableName + "\" WHERE \"" + sourceCol + "\" = '" + id + "'";
+					if (targetId.length === 1)
+						query += " AND \"" + targetCol + "\" = " + values;
+					else
+						query += " AND \"" + targetCol + "\" IN (" + values + ")";
+					break;
+				case "set":
+					return new Promise((resolve, reject) => {
+						this.associateEntryReversed(model, id, target, null, "clear").then((result) => {
+							this.associateEntryReversed(model, id, target, targetId, "add").then(resolve).catch(reject);
+						}).catch(reject);
+					});
+				case "has":
+					if (targetId.length === 0) {
+						query = false;
+						break;
+					}
+					values = targetId.map((item) => "'" + item + "'");
+					values = values.join(", ");
+					query = "SELECT COUNT(DISTINCT \"" + targetCol + "\") FROM \"" + tableName +
+						"\" WHERE \"" + sourceCol + "\"='" + id + "'";
+					if (targetId.length === 1)
+						query += " AND \"" + targetCol + "\" = " + values;
+					else
+						query += " AND \"" + targetCol + "\" IN (" + values + ")";
+					break;
+				case "get":
+					query = "SELECT \"" + targetTableName + "\".* FROM \"" + tableName + "\"";
+					query += " LEFT JOIN \"" + targetTableName + "\" ON \"" +
+						tableName + "\".\"" + targetCol +"\"=\"" + targetTableName + "\".id";
+					query += " WHERE \"" + tableName + "\".\"" + sourceCol + "\"='" + id + "'";
+					break;
+				case "count":
+					query = "SELECT COUNT(*) FROM \"" + tableName + "\" WHERE \"" + sourceCol + "\"='" + id + "'";
+					break;
+			}
+			if (typeof(query) === "string")
+				query += ";";
+			return new Promise((resolve, reject) => {
+				if (query === null) {
+					resolve([]);
+					return;
+				}
+				if (typeof(query) === "boolean") {
+					resolve(query);
+					return;
+				}
+				this.dbCore.rawQuery(query).then((result) => {
+					switch (operation) {
+						case "clear":
+							resolve(result[1].rowCount);
+							return;
+						case "add":
+							resolve(result[1]);
+							return;
+						case "remove":
+							resolve(result[1].rowCount);
+							return;
+						case "has":
+							resolve(parseInt(result[0][0].count) === targetId.length);
+							return;
+						case "get":
+							resolve(result[0]);
+							return;
+						case "count":
+							resolve(parseInt(result[0][0].count));
+							return;
+					}
+				}).catch(reject);
+			});
+		}
+		else {
+			let entity = this.dbCore.getEntity(target);
+			let colName = string.changeCase.snakeToCamel(model) + "Id";
+			let set = {};
+			let where = {};
+			switch (operation) {
+				case "clear":
+					where[colName] = id;
+					set[colName] = null;
+					break;
+				case "add":
+					where.id = targetId;
+					set[colName] = id;
+					break;
+				case "remove":
+					where.id = targetId;
+					where[colName] = id;
+					set[colName] = null;
+					break;
+				case "set":
+					return new Promise((resolve, reject) => {
+						this.associateEntryReversed(model, id, target, null, "clear").then((result) => {
+							this.associateEntryReversed(model, id, target, targetId, "add").then(resolve).catch(reject);
+						}).catch(reject);
+					});
+				case "has":
+					where.id = targetId;
+				case "get":
+				case "count":
+					where[colName] = id;
+					return new Promise((resolve, reject) => {
+						this.getEntries(target, where).then((result) => {
+							if (operation === "get")
+								resolve(result.map((item) => item.dataValues));
+							else if (operation === "count")
+								resolve(result.length);
+							else
+								resolve(result.length === targetId.length);
+						}).catch(reject);
+					});
+				default:
+					throw new Error("Not implemented (1:n)");
+			}
+			return new Promise((resolve, reject) => {
+				entity.update(set, { where: where }).then((result) => {
+					resolve(result);
+				}).catch(reject);
+			});
+		}
 	}
 
 	/*
