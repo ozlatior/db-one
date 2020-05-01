@@ -14,8 +14,9 @@ class Logger {
 			detail: [ "detail".gray ],
 			sql:	[ " PSQL ".cyan, [ "grey" ] ],
 			info:	[ " INFO ".green ],
-			warn:	[ " WARN ".yellow ],
-			error:	[ " ERROR ".red ]
+			sess:	[ " SESS ".green.bold ],
+			warn:	[ " WARN ".yellow.bold ],
+			error:	[ " ERROR ".red.bold ]
 		};
 		// set default display colors for output
 		this.colors = [];
@@ -149,7 +150,7 @@ class Logger {
 	 */
 	setupLoggingMethods () {
 		for (let i in this.levels) {
-			this[i] = function(text, cls, service) {
+			this[i] = function(text, cls, service, id) {
 				if (!this.isActiveLevel(i))
 					return false;
 				let format = this.levels[i][1];
@@ -158,6 +159,8 @@ class Logger {
 				// build a string: timestamp [ level ] service.cls: text
 				let str = (new Date()).toISOString();
 				str += " [" + this.levels[i][0] + "] ";
+				if (id)
+					str += "<" + id + "> ";
 				let a = [];
 				if (service)
 					a.push(service);
@@ -178,7 +181,7 @@ class Logger {
 		let ret = {};
 		let self = this;
 		for (let i in this.levels) {
-			ret[i] = function(text, cls, service) {
+			ret[i] = function(text, cls, service, id) {
 				let callingService = service;
 				let callingCls = cls;
 				if (bindingService) {
@@ -193,7 +196,7 @@ class Logger {
 					else
 						callingCls = bindingCls;
 				}
-				self[i](text, callingCls, callingService);
+				self[i](text, callingCls, callingService, id);
 			};
 		}
 		return ret;
