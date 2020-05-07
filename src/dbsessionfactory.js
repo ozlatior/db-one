@@ -11,6 +11,8 @@ const object = require("util-one").object;
 const logger = require("./logger.js").getInstance().moduleBinding("DBSessionFactory", "db-one");
 
 const DBSession = require("./dbsession.js");
+const Hooks = require("./hooks.js");
+
 const DBError = require("./dberror.js");
 
 const SESSION_MODEL = {
@@ -54,6 +56,13 @@ class DBSessionFactory {
 		if (this.sessionModel === undefined)
 			this.sessionModel = object.deepCopy(SESSION_MODEL);
 		DBSession.modelName = this.sessionModel.name;
+
+		// hooks set-up
+		this.hooks = new Hooks();
+		this.hooks.registerHook("createSession");
+		this.hooks.registerHook("destroySession");
+		this.hooks.registerHook("dbOperationRequest");
+		this.hooks.registerHook("dbOperationResponse");
 	}
 
 	getSessionModel () {
@@ -95,7 +104,13 @@ class DBSessionFactory {
 		logger.info("Creating new session instance for owner " + ownerId, "createInstance");
 		logger.detail("  options = " + JSON.stringify(options), "createInstance");
 		logger.detail("  state = " + JSON.stringify(state), "createInstance");
-		return new Promise((resolve, reject) => {
+		return new Promise(async (resolve, reject) => {
+			let caught = false;
+			if (this.hooks && this.hooks.handleCreateSession)
+				await this.hooks.handleCreateSession({ source: this, ownerId: ownerId, options: options, state: state })
+					.catch((e) => { caught = true; reject(e) });
+			if (caught)
+				return;
 			this.dbConnector.createEntry(this.sessionModel.name, {
 				options: JSON.stringify(options),
 				state: JSON.stringify(state),
@@ -104,6 +119,7 @@ class DBSessionFactory {
 			}).then((result) => {
 				let instance = new this.dbSessionClass(this.dbConnector, result.id, ownerId, options, state);
 				logger.info("Created new session instance for owner " + ownerId + ", id = " + result.id, "createInstance");
+				instance.attachHooks(this.hooks);
 				this.sessions[result.id] = instance;
 				resolve(instance);
 			}).catch(reject);
@@ -132,13 +148,39 @@ class DBSessionFactory {
 
 	removeInstance (sessionId, options) {
 		logger.info("Removing session instance with id = " + sessionId, "removeInstance");
-		return new Promise((resolve, reject) => {
+		return new Promise(async (resolve, reject) => {
+			let caught = false;
+			if (this.hooks && this.hooks.handleDestroySession)
+				await this.hooks.handleDestroySession({ source: this, sessionId: sessionId, options: options })
+					.catch((e) => { caught = true; reject(e) });
+			if (caught)
+				return;
 			this.dbConnector.deleteEntry(this.sessionModel.name, sessionId).then((result) => {
 				if (!result)
 					logger.warn("Session not found for removal, id = " + sessionId, "removeInstance");
 				resolve(result);
 			}).catch(reject);
 		});
+	}
+
+	registerCreateSessionHandler (fn) {
+		logger.info("Registering create instance handler", "registerCreateInstanceHandler");
+		this.hooks.registerHandler("createSession", fn);
+	}
+
+	registerDestroySessionHandler (fn) {
+		logger.info("Registering destroy instance handler", "registerDestroyInstanceHandler");
+		this.hooks.registerHandler("destroySession", fn);
+	}
+
+	registerDbOperationRequestHandler (fn) {
+		logger.info("Registering database operation request handler", "registerDbOperationRequestHandler");
+		this.hooks.registerHandler("dbOperationRequest", fn);
+	}
+
+	registerDbOperationResponseHandler (fn) {
+		logger.info("Registering database operation response handler", "registerDbOperationResponseHandler");
+		this.hooks.registerHandler("dbOperationResponse", fn);
 	}
 
 }

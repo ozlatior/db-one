@@ -15,6 +15,7 @@ class DBSession {
 		this.ownerId = ownerId;
 		this.options = options;
 		this.state = state;
+		this.hooks = null;
 	}
 
 	getSessionId () {
@@ -27,6 +28,10 @@ class DBSession {
 
 	getConnector () {
 		return this.dbConnector;
+	}
+
+	attachHooks (hooks) {
+		this.hooks = hooks;
 	}
 
 	setState (values) {
