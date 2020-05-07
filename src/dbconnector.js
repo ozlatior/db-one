@@ -80,7 +80,7 @@ class DBConnector extends ModelLoader {
 			if (entity === undefined)
 				throw new DBError("No such model/entity " + model);
 			entity.update(data, { where: { id : id } }).then((result) => {
-				resolve(result.dataValues);
+				resolve(result[0]);
 			}).catch(reject);
 		});
 	}
