@@ -17,6 +17,8 @@ const GeneratorError = require("./generatorerror.js");
 
 const TEMPLATES = require("./dbgeneratortemplates.js");
 
+const DEFAULT_ASSOCIATION_FLAG_DEPTH = 0;
+
 class DBGenerator extends ModelLoader {
 
 	constructor (dbCore, className) {
@@ -25,10 +27,15 @@ class DBGenerator extends ModelLoader {
 		logger.info("Creating DGGenerator Object, className = " + className);
 		super(dbCore);
 		this.className = className;
+
 		this.ctx = Object.create(null);
 		this.ctx.DBSession = DBSession;
 		this.ctx.DBError = DBError;
 		this.ctx.logger = require("./logger.js").getInstance(className).moduleBinding(className, "db-one");
+
+		this.settings = {
+			associationFlagDepth: DEFAULT_ASSOCIATION_FLAG_DEPTH
+		};
 	}
 
 	processFunctionTemplate (str, tokens) {
@@ -108,7 +115,47 @@ class DBGenerator extends ModelLoader {
 		return ret;
 	}
 
-	attachEntityMethods (proto, entity, doc) {
+	generateFunctionObject (args, body, dynamic) {
+		if (dynamic)
+			return vm.runInNewContext("new Function('" + args.join(",") + "', `" + body + "`);", this.ctx);
+		return { args: args, body: body };
+	}
+
+	getAssociationFlags (tree, paths, depth) {
+		let ret = {};
+		paths = JSON.parse(JSON.stringify(paths));
+		for (let i=0; i<paths.length; i++) {
+			paths[i] = paths[i].slice(1);
+			for (let j=0; j<paths[i].length; j++) {
+				if (depth && j >= depth)
+					continue;
+				let path = paths[i].slice(0, j+1);
+				// copy path settings and push them to flag object
+				let node = tree;
+				let names = [];
+				let plural = false;
+				let chain = path.map((item) => {
+					node = node.children[item];
+					if (node.reversed || node.type === "hasMany" || node.type === "belongsToMany")
+						plural = true;
+					names.push(node.target);
+					return {
+						source: node.source,
+						target: node.target,
+						type: node.type,
+						reversed: node.reversed
+					};
+				});
+				let flag = "include" + string.changeCase.snakeToCapital(names.join("_"));
+				if (plural)
+					flag = inflection.pluralize(flag);
+				ret[flag] = chain;
+			}
+		}
+		return ret;
+	}
+
+	attachEntityMethods (proto, entity, doc, dynamic) {
 		logger.info("Attaching entity methods for " + entity, "attachEntityMethods");
 		let res;
 		let fn;
@@ -121,12 +168,19 @@ class DBGenerator extends ModelLoader {
 			__MODELDO__: "{\n" + args.map((item) => { return "\t\t\t\t" + item + ": " + item }).join(",\n") + "\n\t\t\t}"
 		};
 
+		// get association tree for options
+		let assocPaths = [];
+		let assocTree = this.getModelAssociationTree(entity, assocPaths);
+		let assocFlags = this.getAssociationFlags(assocTree, assocPaths, this.settings.associationFlagDepth);
+		console.log(assocFlags);
+		throw new Error("x");
+
 		// create entity
 		fn = this.getFunctionName("create", entity);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.create, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "create", entity);
 
 		// create entity by arguments
@@ -134,7 +188,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.createByArgs, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "create", entity);
 
 		// retrieve entity
@@ -142,7 +196,8 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.retrieve, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
+		res.objects = { options: { associationFlags: assocFlags } };
 		doc.push(fn, res, "retrieve", entity);
 
 		// update entity
@@ -150,7 +205,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.update, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "update", entity);
 
 		// update entity by arguments
@@ -158,7 +213,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.updateByArgs, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "update", entity);
 
 		// delete entity
@@ -166,7 +221,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.delete, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "delete", entity);
 
 		// list entities
@@ -174,11 +229,12 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.list, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachEntityMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
+		res.objects = { options: { associationFlags: assocFlags } };
 		doc.push(fn, res, "list", entity);
 	}
 
-	attachOneToManyMethods (proto, entity, target, doc) {
+	attachOneToManyMethods (proto, entity, target, doc, dynamic) {
 		logger.info("Attaching one to many methods for " + entity + ", " + target, "attachOneToManyMethods");
 		let res;
 		let fn;
@@ -195,7 +251,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "set", entity, target);
 
 		// get association
@@ -204,7 +260,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "get", entity, target);
 
 		// unset association
@@ -212,7 +268,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationUnset, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "set", entity, target);
 
 		// isSet association
@@ -220,7 +276,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationIsSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "set", entity, target);
 
 		// check that target is associated
@@ -228,11 +284,11 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationCompare, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "is", entity, target);
 	}
 
-	attachManyToManyMethods (proto, entity, target, doc) {
+	attachManyToManyMethods (proto, entity, target, doc, dynamic) {
 		logger.info("Attaching many to many methods for " + entity + ", " + target, "attachManyToManyMethods");
 		let res;
 		let fn;
@@ -249,7 +305,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "add", entity, target);
 
 		// remove association
@@ -258,7 +314,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "remove", entity, target);
 
 		// set all associations
@@ -267,7 +323,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "setMany", entity, target);
 
 		// get all associations
@@ -276,7 +332,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationGet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "getMany", entity, target);
 
 		// check that target is associated
@@ -285,7 +341,7 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "has", entity, target);
 
 		// count associated target entities
@@ -294,19 +350,19 @@ class DBGenerator extends ModelLoader {
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationGet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
-		proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+		proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 		doc.push(fn, res, "count", entity, target);
 	}
 
-	attachAssociationMethods (proto, association, doc) {
+	attachAssociationMethods (proto, association, doc, dynamic) {
 		logger.info("Attaching association methods for " + JSON.stringify(association), "attachAssociationMethods");
 		if (association.type === "hasMany" || association.type === "belongsToMany")
-			this.attachManyToManyMethods(proto, association.source, association.target, doc);
+			this.attachManyToManyMethods(proto, association.source, association.target, doc, dynamic);
 		else
-			this.attachOneToManyMethods(proto, association.source, association.target, doc);
+			this.attachOneToManyMethods(proto, association.source, association.target, doc, dynamic);
 	}
 
-	attachReverseAssociationMethods (proto, association, doc) {
+	attachReverseAssociationMethods (proto, association, doc, dynamic) {
 		logger.info("Attaching reverse association methods for " + JSON.stringify(association), "attachReverseAssociationMethods");
 		let res;
 		let fn;
@@ -328,7 +384,7 @@ class DBGenerator extends ModelLoader {
 			tokens.__OP__ = "add";
 			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
 			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
-			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 			doc.push(fn, res, "add", entity, target);
 		}
 
@@ -341,7 +397,7 @@ class DBGenerator extends ModelLoader {
 			tokens.__OP__ = "remove";
 			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
 			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
-			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 			doc.push(fn, res, "remove", entity, target);
 		}
 
@@ -354,7 +410,7 @@ class DBGenerator extends ModelLoader {
 			tokens.__OP__ = "set";
 			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
 			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
-			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 			doc.push(fn, res, "setMany", entity, target);
 		}
 
@@ -367,7 +423,7 @@ class DBGenerator extends ModelLoader {
 			tokens.__OP__ = "get";
 			res = this.processFunctionTemplate(TEMPLATES.associationGetReversed, tokens);
 			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
-			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 			doc.push(fn, res, "getMany", entity, target);
 		}
 
@@ -380,7 +436,7 @@ class DBGenerator extends ModelLoader {
 			tokens.__OP__ = "has";
 			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
 			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
-			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 			doc.push(fn, res, "has", entity, target);
 		}
 
@@ -393,7 +449,7 @@ class DBGenerator extends ModelLoader {
 			tokens.__OP__ = "count";
 			res = this.processFunctionTemplate(TEMPLATES.associationGetReversed, tokens);
 			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
-			proto[fn] = vm.runInNewContext("new Function('" + res.args.join(",") + "', `" + res.body + "`);", this.ctx);
+			proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
 			doc.push(fn, res, "count", entity, target);
 		}
 	}
@@ -401,18 +457,18 @@ class DBGenerator extends ModelLoader {
 	/*
 	 * proto could be a prototype object or just any object if we want to generate code instead
 	 */
-	attachMethods (proto, doc) {
+	attachMethods (proto, doc, dynamic) {
 		// model CRUD methods
 		for (let i in this.models)
-			this.attachEntityMethods(proto, i, doc);
+			this.attachEntityMethods(proto, i, doc, dynamic);
 		// association methods (direct)
 		for (let i in this.associations)
 			for (let j in this.associations[i])
-				this.attachAssociationMethods(proto, this.associations[i][j], doc);
+				this.attachAssociationMethods(proto, this.associations[i][j], doc, dynamic);
 		// association methods (reverse)
 		for (let i in this.associations)
 			for (let j in this.associations[i])
-				this.attachReverseAssociationMethods(proto, this.associations[i][j], doc);
+				this.attachReverseAssociationMethods(proto, this.associations[i][j], doc, dynamic);
 	}
 
 	generateSessionClass (doc) {
@@ -430,8 +486,90 @@ class DBGenerator extends ModelLoader {
 			return null;
 		}
 
-		this.attachMethods(ret.prototype, doc);
+		this.attachMethods(ret.prototype, doc, true);
 
+		return ret;
+	}
+
+	pushEmptyLine (code, count) {
+		if (count === undefined)
+			count = 1;
+		for (let i=0; i<count; i++)
+			code.push("");
+	}
+
+	pushCommentBlock (code, block, indent) {
+		if (indent === undefined)
+			indent = 0;
+		let tabs = "";
+		for (let i=0; i<indent; i++)
+			tabs += "\t";
+
+		code.push(tabs + "/*");
+		for (let i=0; i<block.length; i++)
+			code.push(tabs + " * " + block[i]);
+		code.push(tabs + " */");
+	}
+
+	pushCodeBlock (code, block, indent) {
+		if (indent === undefined)
+			indent = 0;
+		let tabs = "";
+		for (let i=0; i<indent; i++)
+			tabs += "\t";
+
+		for (let i=0; i<block.length; i++)
+			code.push(tabs + block[i]);
+	}
+
+	generateSessionClassCode (doc) {
+		logger.info("Generating session class code, className = " + this.className);
+		if (!doc)
+			doc = { push: () => {} };
+		let ret = [];
+
+		this.pushCommentBlock(ret, [
+			"Generated DBSession Class " + this.className,
+			"",
+			"This file has been generated by the DBGenerator class, it is not recommended to",
+			"edit this file directly but to extend from it to add more features, so it can",
+			"be generated again if needed without overwriting the edits"
+		]);
+		this.pushEmptyLine(ret);
+
+		this.pushCodeBlock(ret, [
+			'const DBSession = require("./dbsession.js");',
+			'',
+			'const DBError = require("./dberror.js");',
+			'',
+			'const logger = require("./logger.js").getInstance(className).moduleBinding(className, "db-one");'
+		]);
+		this.pushEmptyLine(ret);
+
+		this.pushCommentBlock(ret, [ this.className + " class declaration" ]);
+		this.pushCodeBlock(ret, [ "class " + this.className + " extends DBSession {" ]);
+
+		let methods = {};
+		this.attachMethods(methods, doc, false);
+		let briefs = {};
+		if (doc.getBlockBriefs)
+			briefs = doc.getBlockBriefs();
+
+		for (let i in methods) {
+			this.pushEmptyLine(ret);
+			if (briefs[i] !== undefined) {
+				this.pushCommentBlock(ret, briefs[i], 1);
+				this.pushEmptyLine(ret);
+			}
+			this.pushCodeBlock(ret, [ i + " (" + methods[i].args.join(", ") + ") {" ], 1);
+			ret = ret.concat(methods[i].body);
+			this.pushCodeBlock(ret, [ "}" ], 1);
+			this.pushEmptyLine(ret);
+		}
+
+		this.pushCodeBlock(ret, [ "}" ]);
+
+		ret = ret.join("\n");
 		return ret;
 	}
 

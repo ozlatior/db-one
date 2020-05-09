@@ -114,6 +114,54 @@ class ModelLoader {
 		return ret;
 	}
 
+	getModelAssociationTree (model, paths, node, path) {
+		if (node === undefined)
+			node = {};
+		if (paths === undefined)
+			paths = [];
+		if (path === undefined)
+			path = [];
+		path = path.concat(model);
+		// run through all associations for this model
+		if (this.associations[model]) {
+			for (let i in this.associations[model]) {
+				if (path.indexOf(i) !== -1)
+					continue;
+				if (node.children === undefined)
+					node.children = {};
+				node.children[i] = {
+					source: model,
+					target: i,
+					type: this.associations[model][i].type,
+					reversed: false
+				};
+				this.getModelAssociationTree(i, paths, node.children[i], path);
+			}
+		}
+		// run through all reversed associations
+		for (let i in this.associations) {
+			if (this.associations[i][model]) {
+				if (path.indexOf(i) !== -1)
+					continue;
+				if (node.children === undefined)
+					node.children = {};
+				if (node.children[i] !== undefined)
+					continue;
+				node.children[i] = {
+					source: model,
+					target: i,
+					type: this.associations[i][model].type,
+					reversed: true
+				};
+				this.getModelAssociationTree(i, paths, node.children[i], path);
+			}
+		}
+		// leaf node, save path
+		if (node.children === undefined)
+			paths.push(path);
+		return node;
+	}
+
 	isModelInitialised (model) {
 		if (this.models[model] === undefined)
 			throw new DBError("No such model " + model);
