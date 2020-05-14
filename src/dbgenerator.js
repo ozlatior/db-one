@@ -171,9 +171,9 @@ class DBGenerator extends ModelLoader {
 		// get association tree for options
 		let assocPaths = [];
 		let assocTree = this.getModelAssociationTree(entity, assocPaths);
+		assocPaths.sort((a, b) => { return a.length - b.length; });
 		let assocFlags = this.getAssociationFlags(assocTree, assocPaths, this.settings.associationFlagDepth);
-		console.log(assocFlags);
-		throw new Error("x");
+		tokens.__ASSOC_BLOCK__ = TEMPLATES.ASSOC_BLOCK(assocFlags);
 
 		// create entity
 		fn = this.getFunctionName("create", entity);

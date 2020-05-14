@@ -367,6 +367,135 @@ class DBConnector extends ModelLoader {
 		return actualFn + target.slice(0, 1).toUpperCase() + target.slice(1);
 	}
 
+	/*
+	 * Optimized function for returning all associations for a list of entries
+	 * Since this will be called a lot and it can be called on multiple associated entries with
+	 * multiple sources and targets, it uses raw queries to improve performance (instead of calling
+	 * the association functions for each source entry)
+	 * Returns a promise, the result of this promise will be an object containing all associations for
+	 * each source key
+	 */
+	getAllAssociated(source, target, sourceIds, fullData) {
+		logger.info("Getting all associated entries for " + source + " and " + target, "getAllAssociated");
+		// we have to use "map" to check if it's an array or not because instanceof does not work when called from the
+		// dynamically generated functions - I have a suspicion it has to do with the context being different, so maybe
+		// the references to the Array prototype are different... this is the next best thing
+		if (sourceIds && !(sourceIds.map))
+			sourceIds = [ sourceIds ];
+		logger.detail("  source ids: " + sourceIds.join(", "), "getAllAssociated");
+
+		let type, through;
+		if (this.associations[target] !== undefined && this.associations[target][source] !== undefined) {
+			type = this.associations[target][source].type + " reversed";
+			through = this.associations[target][source].through;
+		}
+		if (this.associations[source] !== undefined && this.associations[source][target] !== undefined) {
+			type = this.associations[source][target].type;
+			through = this.associations[source][target].through;
+		}
+		logger.detail("  association: " + type, "getAllAssociated");
+
+		// based on association types we have two possibilities for table layout and two for source and
+		// target positioning, which are handled here
+		let sourceTable = inflection.pluralize(source);
+		let targetTable = inflection.pluralize(target);
+		let condition = "";
+		if (sourceIds) {
+			if (sourceIds.length === 1)
+				condition = " = '" + sourceIds[0] + "'";
+			else
+				condition = " IN ('" + sourceIds.join("', '") + "')";
+		}
+		let query = null;
+		let multiple;
+		switch (type) {
+			case "hasOne":
+			case "belongsTo":					// user, role
+				multiple = false;
+				if (condition !== "")
+					condition = ' WHERE "' + sourceTable + '"."id"' + condition;
+				if (fullData)
+					query = 'SELECT "' + sourceTable + '"."id" AS "' + source + 'Id", "' +
+						targetTable + '"."id" AS "' + target + 'Id", "' + targetTable + '".* FROM "' +
+						sourceTable + '" JOIN "' + targetTable + '" ON "' +
+						sourceTable + '"."' + target + 'Id" = "' + targetTable + '"."id"' + condition + ";";
+				else
+					query = 'SELECT "id" AS "' + source + 'Id", "' + target + 'Id" FROM "' + sourceTable + '"' + condition + ";";
+				break;
+			case "hasOne reversed":
+			case "belongsTo reversed":			// role, user
+				multiple = true;
+				if (condition !== "")
+					condition = ' WHERE "' + targetTable + '"."' + source + 'Id"' + condition;
+				if (fullData)
+					query = 'SELECT "id" AS "' + target + 'Id", * FROM "' + targetTable + '"' + condition + ";";
+				else
+					query = 'SELECT "id" AS "' + target + 'Id", "' + source + 'Id" FROM "' + targetTable + '"' + condition + ";";
+				break;
+			case "hasMany":
+			case "belongsToMany":				// role, permission
+			case "hasMany reversed":
+			case "belongsToMany reversed":		// permission, role
+				multiple = true;
+				if (condition !== "")
+					condition = ' WHERE "' + through + '"."' + source + 'Id"' + condition;
+				if (fullData)
+					query = 'SELECT "' + through + '"."' + source + 'Id" AS "' + source + 'Id", "' +
+						through + '"."' + target + 'Id" AS "' + target + 'Id", "' + targetTable + '".* FROM "' +
+						through + '" JOIN "' + targetTable + '" ON "' +
+						through + '"."' + target + 'Id" = "' + targetTable + '"."id"' + condition + ";";
+				else
+					query = 'SELECT "' + through + '"."' + source + 'Id" AS "' + source + 'Id", "' +
+						through + '"."' + target + 'Id" AS "' + target + 'Id" FROM "' + through + '" ' + condition + ";";
+				break;
+			default:
+				throw new Error("Unknown association type " + type);
+		}
+
+		// run the query
+		return new Promise((resolve, reject) => {
+			this.dbCore.rawQuery(query).then((result) => {
+				result = result[0];
+				if (result === undefined || !(result instanceof Array))
+					throw new Error("Query failed");
+				// we want unique objects for each ID for optimisation, so we create two objects
+				// the first will store source and target id associations and the second will store the actual
+				// data for each target id
+				let sources = {};
+				let targets = {};
+				// build sources object frame
+				for (let i=0; i<sourceIds.length; i++) {
+					if (multiple)
+						sources[sourceIds[i]] = [];
+					else
+						sources[sourceIds[i]] = null;
+				}
+				// build targets object to keep unique instances and merge them to source object
+				for (let i=0; i<result.length; i++) {
+					let sourceId = result[i][source + "Id"];
+					let targetId = result[i][target + "Id"];
+					if (targets[targetId] === undefined) {
+						targets[targetId] = { id: targetId };
+						if (fullData) {
+							for (let j in result[i]) {
+								if (j === source + "Id" && type !== "hasOne reversed" && type !== "belongsTo reversed")
+									continue;
+								if (j === target + "Id")
+									continue;
+								targets[targetId][j] = result[i][j];
+							}
+						}
+					}
+					if (multiple)
+						sources[sourceId].push(targets[targetId]);
+					else
+						sources[sourceId] = targets[targetId];
+				}
+				resolve(sources);
+			}).catch(reject);
+		});
+	}
+
 }
 
 module.exports = DBConnector;

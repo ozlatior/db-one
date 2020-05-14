@@ -1,7 +1,6 @@
 const TEMPLATES = {
 
-	// TODO: options
-
+	// method templates
 	create: function (__MODELCC__Data) {
 		logger.sess("Creating __MODEL__ with values " + JSON.stringify(__MODELCC__Data), "__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
@@ -130,11 +129,20 @@ const TEMPLATES = {
 			this.dbConnector.listEntries("__MODEL__", { id: __MODELCC__Id }).then(async (result) => {
 				if (result.length === 0)
 					throw new DBError("No __MODEL__ with id " + __MODELCC__Id + " found");
+				let solved = {};//__ASSOC_BLOCK__
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
 					let entries = {
 						"__MODEL__": result
 					};
+					for (let i in solved) {
+						let target = i.split("/").pop();
+						if (entries[target] === undefined)
+							entries[target] = [];
+						for (j=0; j<solved[i].length; j++)
+							if (entries[target].indexOf(solved[i][j]) === -1)
+								entries[target].push(solved[i][j]);
+					}
 					let arg = {
 						source: this,
 						op: "retrieve",
@@ -149,7 +157,7 @@ const TEMPLATES = {
 				}
 				if (caught)
 					return;
-				resolve(result[0]);
+				resolve(ret);
 			}).catch(reject);
 
 		});
@@ -318,6 +326,7 @@ const TEMPLATES = {
 			logger.sess("Listing all __MODEL__ entries with " + JSON.stringify(filter), "__FN__", null, this.sessionId);
 		else
 			logger.sess("Listing all __MODEL__ entries", "__FN__", null, this.sessionId);
+		logger.detail("  options = " + JSON.stringify(options), "__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
 			let caught = false;
@@ -338,11 +347,20 @@ const TEMPLATES = {
 				return;
 
 			this.dbConnector.listEntries("__MODEL__", {}).then(async (result) => {
+				let solved = {};//__ASSOC_BLOCK__
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
 					let entries = {
 						"__MODEL__" : result
 					};
+					for (let i in solved) {
+						let target = i.split("/").pop();
+						if (entries[target] === undefined)
+							entries[target] = [];
+						for (j=0; j<solved[i].length; j++)
+							if (entries[target].indexOf(solved[i][j]) === -1)
+								entries[target].push(solved[i][j]);
+					}
 					let arg = {
 						source: this,
 						op: "list",
@@ -741,6 +759,38 @@ const TEMPLATES = {
 			}).catch(reject);
 
 		});
+	},
+
+	// code blocks
+	ASSOC_BLOCK: function (flags) {
+		let ret = [];
+		for (let flag in flags) {
+			ret.push("if (options." + flag + " === true) {");
+			ret.push("\tlet sources = result;");
+			let path = "";
+			for (let i=0; i<flags[flag].length; i++) {
+				path += "/" + flags[flag][i].target;
+				if (i < flags[flag].length-1) {
+					ret.push("\tif (solved[\"" + path + "\"] === undefined) {");
+					ret.push("\t\tsolved[\"" + path + "\"] = [];");
+					ret.push("\t\tawait this.getAssociatedEntries(\"" + flags[flag][i].source + "\", \"" +
+						flags[flag][i].target + "\", sources,");
+					ret.push("\t\t\tsolved[\"" + path + "\"], false).catch(reject);");
+					ret.push("\t}");
+					ret.push("\tsources = solved[\"" + path + "\"];");
+				}
+				else {
+					ret.push("\tsolved[\"" + path + "\"] = [];");
+					ret.push("\tawait this.getAssociatedEntries(\"" + flags[flag][i].source + "\", \"" +
+						flags[flag][i].target + "\", sources,");
+					ret.push("\t\tsolved[\"" + path + "\"], true).catch(reject);");
+				}
+			}
+			ret.push("}");
+		}
+		if (ret.length === 0)
+			return "";
+		return "\n\n\t\t\t\t" + ret.join("\n\t\t\t\t") + "\n";
 	}
 
 };
