@@ -107,7 +107,6 @@ class DBSession {
 						entries ++;
 					}
 				}
-				console.log(targetList);
 				resolve(entries);
 			});
 		});

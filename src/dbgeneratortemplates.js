@@ -157,7 +157,7 @@ const TEMPLATES = {
 				}
 				if (caught)
 					return;
-				resolve(ret);
+				resolve(result[0]);
 			}).catch(reject);
 
 		});
@@ -321,11 +321,14 @@ const TEMPLATES = {
 	},
 
 	// TODO: filters
+	// For now, we just use the sequelize interface (Op object allowed)
 	list: function (filter, options) {
 		if (filter)
 			logger.sess("Listing all __MODEL__ entries with " + JSON.stringify(filter), "__FN__", null, this.sessionId);
-		else
+		else {
 			logger.sess("Listing all __MODEL__ entries", "__FN__", null, this.sessionId);
+			filter = {};
+		}
 		logger.detail("  options = " + JSON.stringify(options), "__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
@@ -346,7 +349,7 @@ const TEMPLATES = {
 			if (caught)
 				return;
 
-			this.dbConnector.listEntries("__MODEL__", {}).then(async (result) => {
+			this.dbConnector.listEntries("__MODEL__", filter).then(async (result) => {
 				let solved = {};//__ASSOC_BLOCK__
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
