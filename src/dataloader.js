@@ -14,6 +14,18 @@ class DataLoader {
 		this.batch = [];
 	}
 
+	applyFunctionCalls (batch) {
+		logger.info("Apply function calls for batch of " + batch.length + " items");
+		for (let i=0; i<batch.length; i++) {
+			for (let j in batch[i].data) {
+				if (batch[i].data[j] && typeof(batch[i].data[j]) === "object" && batch[i].data[j].functionName) {
+					batch[i].data[j] = this.dbConnector.callFunction(
+						batch[i].data[j].functionName, batch[i].data[j].args, batch[i]);
+				}
+			}
+		}
+	}
+
 	buildMetaBlock (model, data) {
 		logger.info("Building " + model + " metablock", "buildMetaBlock");
 		logger.detail("  data = " + JSON.stringify(data), "buildMetaBlock");
@@ -173,6 +185,7 @@ class DataLoader {
 		logger.info("Inserting data n=" + this.batch.length, "insertLoadedData");
 		// use this object to cache associations (so we don't query them every time)
 		let cache = {};
+		this.applyFunctionCalls(this.batch);
 		let sets = this.buildDependencySets(this.batch);
 		this.batch = [];
 		for (let i=0; i<sets.length; i++) {

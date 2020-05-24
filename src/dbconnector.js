@@ -4,6 +4,7 @@
 
 const inflection = require("inflection");
 const string = require("util-one").string;
+const object = require("util-one").object;
 
 const logger = require("./logger.js").getInstance().moduleBinding("DBConnector", "db-one");
 
@@ -16,6 +17,43 @@ class DBConnector extends ModelLoader {
 	constructor (dbCore) {
 		logger.info("Creating DBConnector Object");
 		super(dbCore);
+		this.functions = {};
+		this.constants = {};
+
+		this.addFunction("now", function() { return (new Date()); });
+	}
+
+	addConstant (name, value) {
+		this.constants[name] = value;
+	}
+
+	addFunction (name, fn) {
+		logger.info("Adding function " + name, "addFunction");
+		this.functions[name] = fn;
+	}
+
+	callFunction (name, args, obj) {
+		if (!args)
+			args = [];
+		logger.info("Calling function " + name + " with args [ " + args.join(", ") + " ]", "callFunction");
+		for (let i=0; i<args.length; i++) {
+			// is it a constant?
+			if (args[i][0] === "#") {
+				let name = args[i].slice(1);
+				if (this.constants[name] === undefined)
+					throw new Error("No such constant " + name);
+				args[i] = this.constants[name];
+			}
+			// is it an object value?
+			else if (args[i][0] === "$") {
+				let path = args[i].slice(1).split(".");
+				let value = object.deepRead(obj, path);
+				if (value === undefined)
+					throw new Error("No such path in object " + args[i]);
+				args[i] = value;
+			}
+		}
+		return this.functions[name].apply(null, args);
 	}
 
 	getEntries (model, condition) {
