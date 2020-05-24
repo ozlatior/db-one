@@ -16,6 +16,7 @@ class Logger {
 			info:	[ " INFO ".green ],
 			sess:	[ " SESS ".green.bold ],
 			warn:	[ " WARN ".yellow.bold ],
+			module:	[ "MODULE".green.bold, [ "bold" ] ],
 			error:	[ " ERROR ".red.bold ]
 		};
 		// set default display colors for output
