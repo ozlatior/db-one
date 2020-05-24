@@ -17,7 +17,7 @@ const GeneratorError = require("./generatorerror.js");
 
 const TEMPLATES = require("./dbgeneratortemplates.js");
 
-const DEFAULT_ASSOCIATION_FLAG_DEPTH = 0;
+const DEFAULT_ASSOCIATION_FLAG_DEPTH = 2;
 
 class DBGenerator extends ModelLoader {
 
@@ -36,6 +36,14 @@ class DBGenerator extends ModelLoader {
 		this.settings = {
 			associationFlagDepth: DEFAULT_ASSOCIATION_FLAG_DEPTH
 		};
+	}
+
+	getAssociationFlagDepth () {
+		return this.settings.associationFlagDepth;
+	}
+
+	setAssociationFlagDepth (depth) {
+		this.settings.associationFlagDepth = depth;
 	}
 
 	processFunctionTemplate (str, tokens) {
@@ -108,9 +116,11 @@ class DBGenerator extends ModelLoader {
 			return ret;
 		let assoc = this.associations[entityName];
 		for (let i in assoc) {
-			if (assoc[i].type === "hasMany" || assoc[i].type === "belongsToMany")
-				continue;
-			ret.push(string.changeCase.snakeToCamel(assoc[i].target, true) + "Id");
+			for (let j in assoc[i]) {
+				if (assoc[i][j].type === "hasMany" || assoc[i][j].type === "belongsToMany")
+					continue;
+				ret.push(string.changeCase.snakeToCamel(j, true) + "Id");
+			}
 		}
 		return ret;
 	}
@@ -138,11 +148,12 @@ class DBGenerator extends ModelLoader {
 					node = node.children[item];
 					if (node.reversed || node.type === "hasMany" || node.type === "belongsToMany")
 						plural = true;
-					names.push(node.target);
+					names.push(node.as);
 					return {
 						source: node.source,
 						target: node.target,
 						type: node.type,
+						as: node.as,
 						reversed: node.reversed
 					};
 				});
@@ -170,7 +181,7 @@ class DBGenerator extends ModelLoader {
 
 		// get association tree for options
 		let assocPaths = [];
-		let assocTree = this.getModelAssociationTree(entity, assocPaths);
+		let assocTree = this.getModelAssociationTree(entity + "/" + entity, assocPaths);
 		assocPaths.sort((a, b) => { return a.length - b.length; });
 		let assocFlags = this.getAssociationFlags(assocTree, assocPaths, this.settings.associationFlagDepth);
 		tokens.__ASSOC_BLOCK__ = TEMPLATES.ASSOC_BLOCK(assocFlags);
@@ -234,20 +245,22 @@ class DBGenerator extends ModelLoader {
 		doc.push(fn, res, "list", entity);
 	}
 
-	attachOneToManyMethods (proto, entity, target, doc, dynamic) {
-		logger.info("Attaching one to many methods for " + entity + ", " + target, "attachOneToManyMethods");
+	attachOneToManyMethods (proto, entity, target, as, doc, dynamic) {
+		logger.info("Attaching one to many methods for " + entity + ", " + target + " as " + as, "attachOneToManyMethods");
 		let res;
 		let fn;
 		let tokens = {
 			__MODEL__: entity,
 			__MODELCC__: string.changeCase.snakeToCamel(entity, true),
 			__TARGET__: target,
-			__TARGETCC__: string.changeCase.snakeToCamel(target, true)
+			__TARGETCC__: string.changeCase.snakeToCamel(target, true),
+			__ALIAS__: as,
+			__ALIASCC__: string.changeCase.snakeToCamel(as, true)
 		};
 
 		// set association
 		tokens.__OP__ = "set";
-		fn = this.getFunctionName("set", entity, target);
+		fn = this.getFunctionName("set", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
@@ -256,7 +269,7 @@ class DBGenerator extends ModelLoader {
 
 		// get association
 		tokens.__OP__ = "get";
-		fn = this.getFunctionName("get", entity, target);
+		fn = this.getFunctionName("get", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
@@ -264,7 +277,7 @@ class DBGenerator extends ModelLoader {
 		doc.push(fn, res, "get", entity, target);
 
 		// unset association
-		fn = this.getFunctionName("unset", entity, target);
+		fn = this.getFunctionName("unset", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationUnset, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
@@ -272,7 +285,7 @@ class DBGenerator extends ModelLoader {
 		doc.push(fn, res, "set", entity, target);
 
 		// isSet association
-		fn = this.getFunctionName("isSet", entity, target);
+		fn = this.getFunctionName("isSet", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationIsSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
@@ -280,7 +293,7 @@ class DBGenerator extends ModelLoader {
 		doc.push(fn, res, "set", entity, target);
 
 		// check that target is associated
-		fn = this.getFunctionName("is", entity, target);
+		fn = this.getFunctionName("is", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationCompare, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachOneToManyMethods");
@@ -288,20 +301,22 @@ class DBGenerator extends ModelLoader {
 		doc.push(fn, res, "is", entity, target);
 	}
 
-	attachManyToManyMethods (proto, entity, target, doc, dynamic) {
-		logger.info("Attaching many to many methods for " + entity + ", " + target, "attachManyToManyMethods");
+	attachManyToManyMethods (proto, entity, target, as, doc, dynamic) {
+		logger.info("Attaching many to many methods for " + entity + ", " + target + " as " + as, "attachManyToManyMethods");
 		let res;
 		let fn;
 		let tokens = {
 			__MODEL__: entity,
 			__MODELCC__: string.changeCase.snakeToCamel(entity, true),
 			__TARGET__: target,
-			__TARGETCC__: string.changeCase.snakeToCamel(target, true)
+			__TARGETCC__: string.changeCase.snakeToCamel(target, true),
+			__ALIAS__: as,
+			__ALIASCC__: string.changeCase.snakeToCamel(as, true)
 		};
 
 		// add association
 		tokens.__OP__ = "add";
-		fn = this.getFunctionName("add", entity, target);
+		fn = this.getFunctionName("add", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
@@ -310,7 +325,7 @@ class DBGenerator extends ModelLoader {
 
 		// remove association
 		tokens.__OP__ = "remove";
-		fn = this.getFunctionName("remove", entity, target);
+		fn = this.getFunctionName("remove", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
@@ -319,7 +334,7 @@ class DBGenerator extends ModelLoader {
 
 		// set all associations
 		tokens.__OP__ = "set";
-		fn = this.getFunctionName("setMany", entity, target);
+		fn = this.getFunctionName("setMany", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
@@ -328,7 +343,7 @@ class DBGenerator extends ModelLoader {
 
 		// get all associations
 		tokens.__OP__ = "get";
-		fn = this.getFunctionName("getMany", entity, target);
+		fn = this.getFunctionName("getMany", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationGet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
@@ -337,7 +352,7 @@ class DBGenerator extends ModelLoader {
 
 		// check that target is associated
 		tokens.__OP__ = "has";
-		fn = this.getFunctionName("has", entity, target);
+		fn = this.getFunctionName("has", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationSet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
@@ -346,7 +361,7 @@ class DBGenerator extends ModelLoader {
 
 		// count associated target entities
 		tokens.__OP__ = "count";
-		fn = this.getFunctionName("count", entity, target);
+		fn = this.getFunctionName("count", entity, as);
 		tokens.__FN__ = fn;
 		res = this.processFunctionTemplate(TEMPLATES.associationGet, tokens);
 		logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachManyToManyMethods");
@@ -356,10 +371,15 @@ class DBGenerator extends ModelLoader {
 
 	attachAssociationMethods (proto, association, doc, dynamic) {
 		logger.info("Attaching association methods for " + JSON.stringify(association), "attachAssociationMethods");
+		let source = association.source;
+		let target = association.target;
+		let as = association.as;
+		if (!as)
+			as = target;
 		if (association.type === "hasMany" || association.type === "belongsToMany")
-			this.attachManyToManyMethods(proto, association.source, association.target, doc, dynamic);
+			this.attachManyToManyMethods(proto, source, target, as, doc, dynamic);
 		else
-			this.attachOneToManyMethods(proto, association.source, association.target, doc, dynamic);
+			this.attachOneToManyMethods(proto, source, target, as, doc, dynamic);
 	}
 
 	attachReverseAssociationMethods (proto, association, doc, dynamic) {
@@ -368,15 +388,20 @@ class DBGenerator extends ModelLoader {
 		let fn;
 		let entity = association.target;
 		let target = association.source;
+		let as = association.as;
+		if (!as)
+			as = target;
 		let tokens = {
 			__MODEL__: entity,
 			__MODELCC__: string.changeCase.snakeToCamel(entity, true),
 			__TARGET__: target,
-			__TARGETCC__: string.changeCase.snakeToCamel(target, true)
+			__TARGETCC__: string.changeCase.snakeToCamel(target, true),
+			__ALIAS__: as,
+			__ALIASCC__: string.changeCase.snakeToCamel(as, true)
 		};
 
 		// add association
-		fn = this.getFunctionName("add", entity, target);
+		fn = this.getFunctionName("add", as, target);
 		tokens.__FN__ = fn;
 		if (typeof(proto[fn]) === "function")
 			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
@@ -389,7 +414,7 @@ class DBGenerator extends ModelLoader {
 		}
 
 		// remove association
-		fn = this.getFunctionName("remove", entity, target);
+		fn = this.getFunctionName("remove", as, target);
 		tokens.__FN__ = fn;
 		if (typeof(proto[fn]) === "function")
 			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
@@ -402,7 +427,7 @@ class DBGenerator extends ModelLoader {
 		}
 
 		// set all associations
-		fn = this.getFunctionName("setMany", entity, target);
+		fn = this.getFunctionName("setMany", as, target);
 		tokens.__FN__ = fn;
 		if (typeof(proto[fn]) === "function")
 			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
@@ -411,11 +436,11 @@ class DBGenerator extends ModelLoader {
 			res = this.processFunctionTemplate(TEMPLATES.associationSetReversed, tokens);
 			logger.detail("  attaching " + fn + "(" + res.args.join(", ") + ")", "attachReverseAssociationMethods");
 			proto[fn] = this.generateFunctionObject(res.args, res.body, dynamic);
-			doc.push(fn, res, "setMany", entity, target);
+			doc.push(fn, res, "setMany", entity, target, as);
 		}
 
 		// get all associations
-		fn = this.getFunctionName("getMany", entity, target);
+		fn = this.getFunctionName("getMany", as, target);
 		tokens.__FN__ = fn;
 		if (typeof(proto[fn]) === "function")
 			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
@@ -428,7 +453,7 @@ class DBGenerator extends ModelLoader {
 		}
 
 		// check that target is associated
-		fn = this.getFunctionName("has", entity, target);
+		fn = this.getFunctionName("has", as, target);
 		tokens.__FN__ = fn;
 		if (typeof(proto[fn]) === "function")
 			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
@@ -441,7 +466,7 @@ class DBGenerator extends ModelLoader {
 		}
 
 		// count associated target entities
-		fn = this.getFunctionName("count", entity, target);
+		fn = this.getFunctionName("count", as, target);
 		tokens.__FN__ = fn;
 		if (typeof(proto[fn]) === "function")
 			logger.detail("  already attached to prototype: " + fn, "attachReverseAssociationMethods");
@@ -464,11 +489,13 @@ class DBGenerator extends ModelLoader {
 		// association methods (direct)
 		for (let i in this.associations)
 			for (let j in this.associations[i])
-				this.attachAssociationMethods(proto, this.associations[i][j], doc, dynamic);
+				for (let k in this.associations[i][j])
+					this.attachAssociationMethods(proto, this.associations[i][j][k], doc, dynamic);
 		// association methods (reverse)
 		for (let i in this.associations)
 			for (let j in this.associations[i])
-				this.attachReverseAssociationMethods(proto, this.associations[i][j], doc, dynamic);
+				for (let k in this.associations[i][j])
+					this.attachReverseAssociationMethods(proto, this.associations[i][j][k], doc, dynamic);
 	}
 
 	generateSessionClass (doc) {
@@ -522,10 +549,15 @@ class DBGenerator extends ModelLoader {
 			code.push(tabs + block[i]);
 	}
 
-	generateSessionClassCode (doc) {
+	generateSessionClassCode (doc, paths) {
 		logger.info("Generating session class code, className = " + this.className);
 		if (!doc)
 			doc = { push: () => {} };
+		if (!paths)
+			paths = { src: "./" };
+		if (!paths.src)
+			paths.src = "./";
+
 		let ret = [];
 
 		this.pushCommentBlock(ret, [
@@ -538,11 +570,11 @@ class DBGenerator extends ModelLoader {
 		this.pushEmptyLine(ret);
 
 		this.pushCodeBlock(ret, [
-			'const DBSession = require("./dbsession.js");',
+			'const DBSession = require("' + paths.src + 'dbsession.js");',
 			'',
-			'const DBError = require("./dberror.js");',
+			'const DBError = require("' + paths.src + 'dberror.js");',
 			'',
-			'const logger = require("./logger.js").getInstance(className).moduleBinding(className, "db-one");'
+			'const logger = require("' + paths.src + 'logger.js").getInstance().moduleBinding("' + this.className + '", "db-one");'
 		]);
 		this.pushEmptyLine(ret);
 
@@ -568,6 +600,8 @@ class DBGenerator extends ModelLoader {
 		}
 
 		this.pushCodeBlock(ret, [ "}" ]);
+
+		this.pushCodeBlock(ret, [ "", "module.exports = " + this.className + ";" ]);
 
 		ret = ret.join("\n");
 		return ret;

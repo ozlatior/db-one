@@ -29,7 +29,9 @@ class DataLoader {
 				dataBlock[i] = data[i];
 			if (assocs[i] !== undefined) {
 				associations[assocs[i]] = data[i];
-				deps.push(assocs[i]);
+				let target = this.dbConnector.getModelAssociationTarget(model, assocs[i]);
+				if (deps.indexOf(target) === -1)
+					deps.push(target);
 			}
 		}
 		let ret = {
@@ -117,43 +119,50 @@ class DataLoader {
 			this.batch.push(this.buildMetaBlock(model, data[i]));
 	}
 
-	async getAssociatedIds(associations, cache) {
+	async getAssociatedIds(model, associations, cache) {
 		logger.info("Obtaining associated IDs", "getAssociatedIds");
 		let ret = [];
 		associations = JSON.parse(JSON.stringify(associations));
 		for (let i in associations) {
-			logger.detail("Model " + i + ", associations = " + JSON.stringify(associations[i]), "getAssociatedIds");
-			if (cache[i] === undefined)
-				cache[i] = {
+			let target = this.dbConnector.getModelAssociationTarget(model, i);
+			if (!target) {
+				logger.warn("No association found as " + i + " for model " + model, "getAssociatedIds");
+				continue;
+			}
+			logger.detail("Model " + model + ", " + target + " (" + i + ") associations = " +
+				JSON.stringify(associations[i]), "getAssociatedIds");
+			if (cache[target] === undefined)
+				cache[target] = {
 					complete: false,
 					entries: []
 				};
 			if (associations[i] === "*") { // associate to all entries
-				if (cache[i].complete !== true) {
+				if (cache[target].complete !== true) {
 					// we don't have them all so we clear the cache and read them first
-					cache[i].entries = await this.dbConnector.listEntries(i).catch((e) => { throw e; });
-					cache[i].complete = true;
+					cache[target].entries = await this.dbConnector.listEntries(target).catch((e) => { throw e; });
+					cache[target].complete = true;
 				}
-				cache[i].entries.map((entry) => ret.push({ model: i, id: entry.id }));
+				cache[target].entries.map((entry) => ret.push({ model: target, as: i, id: entry.id }));
 			}
 			else {
 				if (!(associations[i] instanceof Array))
 					associations[i] = [ associations[i] ];
 				for (let j=0; j<associations[i].length; j++) {
-					let entries = array.search(cache[i].entries, associations[i][j]);
+					let entries = array.search(cache[target].entries, associations[i][j]);
 					if (entries.length === 0) {
-						entries = await this.dbConnector.listEntries(i, associations[i][j]).catch((e) => { throw e; });
-						cache[i].entries = cache[i].entries.concat(entries);
+						entries = await this.dbConnector.listEntries(target, associations[i][j]).catch((e) => { throw e; });
+						cache[target].entries = cache[target].entries.concat(entries);
 					}
 					if (entries.length === 0) {
-						logger.warn("No association found for " + i + ", " + associations[i][j], "getAssociatedIds");
+						logger.warn("No association found for " + target + " (" + i + "), " +
+							JSON.stringify(associations[i][j]), "getAssociatedIds");
 						continue;
 					}
 					if (entries.length > 1) {
-						logger.warn("Multiple associations (" + entries.length + ") found for " + i + ", " +
-							associations[i][j], "getAssociatedIds");
+						logger.warn("Multiple associations (" + entries.length + ") found for " + target + " (" + i + "), " +
+							JSON.stringify(associations[i][j]), "getAssociatedIds");
 					}
-					entries.map((entry) => ret.push({ model: i, id: entry.id }));
+					entries.map((entry) => ret.push({ model: target, as: i, id: entry.id }));
 				}
 			}
 		}
@@ -180,11 +189,11 @@ class DataLoader {
 						.catch((e) => { throw e; });
 					// for each association check that it's not in the cache and query it if it's not
 					let assocs = await this
-						.getAssociatedIds(sets[i].blocks[j].associations, cache)
+						.getAssociatedIds(model, sets[i].blocks[j].associations, cache)
 						.catch((e) => { throw e; });
 					for (let k=0; k<assocs.length; k++) {
 						await this.dbConnector
-							.associateEntry(model, entry.id, assocs[k].model, assocs[k].id)
+							.associateEntry(model, entry.id, assocs[k].model, assocs[k].id, assocs[k].as)
 							.catch((e) => { throw e; });
 					}
 				}

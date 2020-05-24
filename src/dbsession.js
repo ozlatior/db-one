@@ -71,7 +71,7 @@ class DBSession {
 		});
 	}
 
-	getAssociatedEntries (source, target, sourceList, targetList, completeObject) {
+	getAssociatedEntries (source, target, as, sourceList, targetList, completeObject) {
 		logger.sess("Getting associated " + target + " entries for all " + source + " entries", "getAssociatedEntries");
 		sourceList = sourceList.slice(0);
 		let sourceIds;
@@ -84,7 +84,7 @@ class DBSession {
 			sourceIds = [ sourceList.id ];
 		logger.detail("  source IDs: " + sourceIds.join(", "));
 		return new Promise((resolve, reject) => {
-			this.dbConnector.getAllAssociated(source, target, sourceIds, completeObject).then((result) => {
+			this.dbConnector.getAllAssociated(source, target, as, sourceIds, completeObject).then((result) => {
 				// the result contains an object with source ids as keys and target data as values, either in an array
 				// for multiple associations or as a single object for single associations
 				// we have to update all objects in the source list and create a target list with unique entries

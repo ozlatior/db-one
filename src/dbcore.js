@@ -4,6 +4,7 @@
 
 const inflection = require("inflection");
 const pgsqlParser = require("pgsql-parser");
+const string = require("util-one").string;
 
 const logger = require("./logger.js").getInstance().moduleBinding("DBCore", "db-one");
 
@@ -48,25 +49,30 @@ class DBCore {
 		return this.entities[name];
 	}
 
-	createAssociation (type, source, target, through) {
-		logger.info("Creating Association " + source + " " + type + " " + target + " " + through,
+	createAssociation (type, source, target, through, as) {
+		logger.info("Creating Association " + source + " " + type + " " + target + " as " + as + " through " + through,
 			"createAssociation");
 		let sourceEntity = this.entities[source];
 		let targetEntity = this.entities[target];
-		let options = { through: through };
+		if (as === undefined)
+			as = target;
+		let options = { through: through, as: as };
 		if (this.associations[source] === undefined)
 			this.associations[source] = {};
-		this.associations[source][target] = {
+		if (this.associations[source][target] === undefined)
+			this.associations[source][target] = {};
+		this.associations[source][target][as] = {
 			type: type,
 			source: source,
 			target: target,
 			through: through,
+			as: as,
 			loaded: false
 		};
 		if (sourceEntity === undefined)
-			throw new DBError("Source entity " + src + " not found");
+			throw new DBError("Source entity " + source + " not found");
 		if (targetEntity === undefined)
-			throw new DBError("Target entity " + src + " not found");
+			throw new DBError("Target entity " + source + " not found");
 		switch (type) {
 			case 'hasOne':
 				sourceEntity.hasOne(targetEntity, options);
@@ -101,8 +107,7 @@ class DBCore {
 						logger.info('Sync succesful', "initialise");
 						resolve();
 					}).catch(reject);
-				})
-				.catch(reject);
+				}).catch(reject);
 		});
 	}
 
@@ -129,8 +134,10 @@ class DBCore {
 					if (el.ColumnDef.constraints[i].Constraint.contype === 8) { // foreign key
 						let target = el.ColumnDef.constraints[i].Constraint.pktable.RangeVar.relname;
 						target = inflection.singularize(target);
+						let as = el.ColumnDef.colname.slice(0, -2);	// remove the "Id" from colname
+						as = string.changeCase.camelToSnake(as);
 						if (this.models[target])
-							assocs.push(target);
+							assocs.push({ target: target, as: as });
 						else
 							logger.warn("No model found for association target " + target, "sync.syncLogFn");
 					}
@@ -146,16 +153,19 @@ class DBCore {
 			// check for associations
 			if (this.associations[modelName]) {
 				for (let i=0; i<assocs.length; i++) {
-					if (this.associations[modelName][assocs[i]]) {
-						this.associations[modelName][assocs[i]].loaded = true;
-						associationCb(modelName, assocs[i]);
+					if (this.associations[modelName][assocs[i].target] &&
+						this.associations[modelName][assocs[i].target][assocs[i].as]) {
+						this.associations[modelName][assocs[i].target][assocs[i].as].loaded = true;
+						associationCb(modelName, assocs[i].target, assocs[i].as);
 					}
 					else
-						logger.warn("No association between " + modelName + " and " + target, "sync.syncLogFn");
+						logger.warn("No association between " + modelName + " and " + assocs[i].target +
+							" as " + assocs[i].as, "sync.syncLogFn");
 				}
 			}
 			else if (assocs.length)
-				logger.warn("No association found for model " + modelName + " (" + assocs.join(", ") + ")", "sync.syncLogFn");
+				logger.warn("No association found for model " + modelName + " (" +
+					assocs.map((item) => (item.target + " as " + item.as)).join(", ") + ")", "sync.syncLogFn");
 			return;
 		}
 		if (!associationCb)
@@ -165,12 +175,15 @@ class DBCore {
 			for (let j=0; j<assocs.length; j++) {
 				if (i === j)
 					continue;
-				if (this.associations[assocs[i]] && this.associations[assocs[i]][assocs[j]]) {
-					this.associations[assocs[i]][assocs[j]].loaded = true;
-					associationCb(assocs[i], assocs[j]);
+				let source = assocs[i].target;
+				let target = assocs[j].target;
+				let as = assocs[j].as;
+				if (this.associations[source] && this.associations[source][target] && this.associations[source][target][as]) {
+					this.associations[source][target][as].loaded = true;
+					associationCb(source, target, as);
 				}
 				else
-					logger.warn("No association between " + assocs[i] + " and " + assocs[j], "sync.syncLogFn");
+					logger.warn("No association between " + source + " and " + target + " as " + as, "sync.syncLogFn");
 			}
 		}
 	}

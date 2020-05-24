@@ -385,7 +385,7 @@ const TEMPLATES = {
 	},
 
 	associationSet: function (__MODELCC__Id, __TARGETCC__Id) {
-		logger.sess("Association __OP__ between __MODEL__ " + __MODELCC__Id + " and __TARGET__ " + __TARGETCC__Id,
+		logger.sess("Association __OP__ between __MODEL__ " + __MODELCC__Id + " and __TARGET__ (__ALIAS__) " + __TARGETCC__Id,
 			"__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
@@ -400,6 +400,7 @@ const TEMPLATES = {
 					op: "__OP__",
 					model: "__MODEL__",
 					target: "__TARGET__",
+					as: "__ALIAS__",
 					entries: entries
 				};
 				await this.hooks.handleDbOperationRequest(arg).catch((e) => {
@@ -410,7 +411,7 @@ const TEMPLATES = {
 			if (caught)
 				return;
 
-			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", __TARGETCC__Id, "__OP__")
+			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", __TARGETCC__Id, "__ALIAS__", "__OP__")
 			  .then(async (result) => {
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
@@ -423,6 +424,7 @@ const TEMPLATES = {
 						op: "__OP__",
 						model: "__MODEL__",
 						target: "__TARGET__",
+						as: "__ALIAS__",
 						entries: entries,
 						result: result
 					};
@@ -440,7 +442,7 @@ const TEMPLATES = {
 	},
 
 	associationGet: function (__MODELCC__Id) {
-		logger.sess("Association __OP__ for __MODEL__ " + __MODELCC__Id + " and __TARGET__",
+		logger.sess("Association __OP__ for __MODEL__ " + __MODELCC__Id + " and __TARGET__ (__ALIAS__)",
 			"__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
@@ -454,6 +456,7 @@ const TEMPLATES = {
 					op: "__OP__",
 					model: "__MODEL__",
 					target: "__TARGET__",
+					as: "__ALIAS__",
 					entries: entries
 				};
 				await this.hooks.handleDbOperationRequest(arg).catch((e) => {
@@ -464,7 +467,8 @@ const TEMPLATES = {
 			if (caught)
 				return;
 
-			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", null, "__OP__").then(async (result) => {
+			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", null, "__ALIAS__", "__OP__")
+			  .then(async (result) => {
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
 					let entries = {
@@ -475,6 +479,7 @@ const TEMPLATES = {
 						op: "__OP__",
 						model: "__MODEL__",
 						target: "__TARGET__",
+						as: "__ALIAS__",
 						entries: entries,
 						result: result
 					};
@@ -492,7 +497,7 @@ const TEMPLATES = {
 	},
 
 	associationUnset: function (__MODELCC__Id) {
-		logger.sess("Association unset for __MODEL__ " + __MODELCC__Id + " and __TARGET__ ",
+		logger.sess("Association unset for __MODEL__ " + __MODELCC__Id + " and __TARGET__ (__ALIAS__)",
 			"__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
@@ -506,6 +511,7 @@ const TEMPLATES = {
 					op: "unset",
 					model: "__MODEL__",
 					target: "__TARGET__",
+					as: "__ALIAS__",
 					entries: entries
 				};
 				await this.hooks.handleDbOperationRequest(arg).catch((e) => {
@@ -516,7 +522,8 @@ const TEMPLATES = {
 			if (caught)
 				return;
 
-			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", null, "set").then(async (result) => {
+			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", null, "__ALIAS__", "set")
+			  .then(async (result) => {
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
 					let entries = {
@@ -527,6 +534,7 @@ const TEMPLATES = {
 						op: "unset",
 						model: "__MODEL__",
 						target: "__TARGET__",
+						as: "__ALIAS__",
 						entries: entries,
 						result: result
 					};
@@ -544,7 +552,7 @@ const TEMPLATES = {
 	},
 
 	associationCompare: function (__MODELCC__Id, __TARGETCC__Id) {
-		logger.sess("Association check (is) between __MODEL__ " + __MODELCC__Id + " and __TARGET__ " + __TARGETCC__Id,
+		logger.sess("Association check (is) between __MODEL__ " + __MODELCC__Id + " and __TARGET__ (__ALIAS__) " + __TARGETCC__Id,
 			"__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
@@ -559,6 +567,7 @@ const TEMPLATES = {
 					op: "is",
 					model: "__MODEL__",
 					target: "__TARGET__",
+					as: "__ALIAS__",
 					entries: entries
 				};
 				await this.hooks.handleDbOperationRequest(arg).catch((e) => {
@@ -569,7 +578,8 @@ const TEMPLATES = {
 			if (caught)
 				return;
 
-			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", null, "get").then(async (result) => {
+			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", null, "__ALIAS__", "get")
+			  .then(async (result) => {
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
 					let entries = {
@@ -581,6 +591,7 @@ const TEMPLATES = {
 						op: "is",
 						model: "__MODEL__",
 						target: "__TARGET__",
+						as: "__ALIAS__",
 						entries: entries,
 						result: result
 					};
@@ -601,7 +612,7 @@ const TEMPLATES = {
 	},
 
 	associationIsSet: function (__MODELCC__Id) {
-		logger.sess("Association check (is set) for __MODEL__ " + __MODELCC__Id + " and __TARGET__",
+		logger.sess("Association check (is set) for __MODEL__ " + __MODELCC__Id + " and __TARGET__ (__ALIAS__)",
 			"__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
@@ -615,6 +626,7 @@ const TEMPLATES = {
 					op: "isSet",
 					model: "__MODEL__",
 					target: "__TARGET__",
+					as: "__ALIAS__",
 					entries: entries
 				};
 				await this.hooks.handleDbOperationRequest(arg).catch((e) => {
@@ -625,7 +637,8 @@ const TEMPLATES = {
 			if (caught)
 				return;
 
-			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", null, "get").then(async (result) => {
+			this.dbConnector.associateEntry("__MODEL__", __MODELCC__Id, "__TARGET__", null, "__ALIAS__", "get")
+			  .then(async (result) => {
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
 					let entries = {
@@ -636,6 +649,7 @@ const TEMPLATES = {
 						op: "isSet",
 						model: "__MODEL__",
 						target: "__TARGET__",
+						as: "__ALIAS__",
 						entries: entries,
 						result: result
 					};
@@ -653,8 +667,8 @@ const TEMPLATES = {
 	},
 
 	associationSetReversed: function (__MODELCC__Id, __TARGETCC__Id) {
-		logger.sess("Association (reverse) __OP__ between __MODEL__ " + __MODELCC__Id + " and __TARGET__ " + __TARGETCC__Id,
-			"__FN__", null, this.sessionId);
+		logger.sess("Association (reverse) __OP__ between __MODEL__ (__ALIAS__) " + __MODELCC__Id + " and __TARGET__ "
+			+ __TARGETCC__Id, "__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
 			let caught = false;
@@ -669,6 +683,7 @@ const TEMPLATES = {
 					reversed: true,
 					model: "__MODEL__",
 					target: "__TARGET__",
+					as: "__ALIAS__",
 					entries: entries
 				};
 				await this.hooks.handleDbOperationRequest(arg).catch((e) => {
@@ -679,7 +694,7 @@ const TEMPLATES = {
 			if (caught)
 				return;
 
-			this.dbConnector.associateEntryReversed("__MODEL__", __MODELCC__Id, "__TARGET__", __TARGETCC__Id, "__OP__")
+			this.dbConnector.associateEntryReversed("__MODEL__", __MODELCC__Id, "__TARGET__", __TARGETCC__Id, "__ALIAS__", "__OP__")
 			  .then(async (result) => {
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
@@ -693,6 +708,7 @@ const TEMPLATES = {
 						reversed: true,
 						model: "__MODEL__",
 						target: "__TARGET__",
+						as: "__ALIAS__",
 						entries: entries,
 						result: result
 					};
@@ -710,7 +726,7 @@ const TEMPLATES = {
 	},
 
 	associationGetReversed: function (__MODELCC__Id) {
-		logger.sess("Association (reverse) __OP__ for __MODEL__ " + __MODELCC__Id + " and __TARGET__",
+		logger.sess("Association (reverse) __OP__ for __MODEL__ (__ALIAS__) " + __MODELCC__Id + " and __TARGET__",
 			"__FN__", null, this.sessionId);
 		return new Promise(async (resolve, reject) => {
 
@@ -725,6 +741,7 @@ const TEMPLATES = {
 					reversed: true,
 					model: "__MODEL__",
 					target: "__TARGET__",
+					as: "__ALIAS__",
 					entries: entries
 				};
 				await this.hooks.handleDbOperationRequest(arg).catch((e) => {
@@ -735,7 +752,7 @@ const TEMPLATES = {
 			if (caught)
 				return;
 
-			this.dbConnector.associateEntryReversed("__MODEL__", __MODELCC__Id, "__TARGET__", null, "__OP__")
+			this.dbConnector.associateEntryReversed("__MODEL__", __MODELCC__Id, "__TARGET__", null, "__ALIAS__", "__OP__")
 			  .then(async (result) => {
 				let caught = false;
 				if (this.hooks && this.hooks.handleDbOperationResponse) {
@@ -748,6 +765,7 @@ const TEMPLATES = {
 						reversed: true,
 						model: "__MODEL__",
 						target: "__TARGET__",
+						as: "__ALIAS__",
 						entries: entries,
 						result: result
 					};
@@ -777,7 +795,7 @@ const TEMPLATES = {
 					ret.push("\tif (solved[\"" + path + "\"] === undefined) {");
 					ret.push("\t\tsolved[\"" + path + "\"] = [];");
 					ret.push("\t\tawait this.getAssociatedEntries(\"" + flags[flag][i].source + "\", \"" +
-						flags[flag][i].target + "\", sources,");
+						flags[flag][i].target + "\", \"" + flags[flag][i].as + "\", sources,");
 					ret.push("\t\t\tsolved[\"" + path + "\"], false).catch(reject);");
 					ret.push("\t}");
 					ret.push("\tsources = solved[\"" + path + "\"];");

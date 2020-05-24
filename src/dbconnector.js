@@ -99,11 +99,11 @@ class DBConnector extends ModelLoader {
 		});
 	}
 
-	associateEntry (model, id, target, targetId, operation) {
+	associateEntry (model, id, target, targetId, as, operation) {
 		if (!operation)
 			operation = "add";
 		logger.info("Association " + operation + " for " + model + " entry id = " + id + " of " +
-			target + " entry id = " + targetId, "associateEntry");
+			target + " (" + as + ") entry id = " + targetId, "associateEntry");
 		let entity = this.dbCore.getEntity(model);
 		let targetEntity = this.dbCore.getEntity(target);
 		return new Promise((resolve, reject) => {
@@ -117,7 +117,7 @@ class DBConnector extends ModelLoader {
 				let plural = false;
 				if (targetId && targetId instanceof Array)
 					plural = true;
-				let fn = this.associationFunctionName(operation, model, target, plural);
+				let fn = this.associationFunctionName(operation, model, target, as, plural);
 				result[0][fn](targetId).then((result) => {
 					if (result instanceof Array) {
 						let ret = [];
@@ -153,21 +153,25 @@ class DBConnector extends ModelLoader {
 	// for many to many associations we have to run queries directly on the association table, unless
 	// the user has defined the association both ways, in which case we can simply run the reverse functions
 	// (in that case this code will not be executed, but the one for regular associations)
-	associateEntryReversed (model, id, target, targetId, operation) {
+	associateEntryReversed (model, id, target, targetId, as, operation) {
 		logger.info("Association " + operation + " for " + target + " entry id = " + targetId + " of " +
-			model + " entry id = " + id, "associateEntryReversed");
-		if (this.associations[target] === undefined || this.associations[target][model] === undefined)
-			throw new DBError("No reverse association between " + model + " and " + target);
-		let type = this.associations[target][model].type;
+			model + " (" + as + ") entry id = " + id, "associateEntryReversed");
+		if (this.associations[target] === undefined)
+			throw new DBError("No associations registered for " + target);
+		if (this.associations[target][model] === undefined || this.associations[target][model][as])
+			throw new DBError("No reverse association between " + model + " (" + as + ") and " + target);
+		let type = this.associations[target][model][as].type;
 		// normalize targetId
 		if (targetId === null)
 			targetId = [];
 		if (!(targetId instanceof Array))
 			targetId = [ targetId ];
-		// it's a many to many, these are symmetrical so we should be able to just call
-		// the regular function with mirrored arguments
+		// if it's a many to many we have to run queries on the association table
+		// normally the "as" setting should not be defined for many to many, if it is this will
+		// cause issues and not work; for now nothing is implemented in this regard
+		// TODO: handle "as" setting
 		if (type === "hasMany" || type === "belongsToMany") {
-			let tableName = this.associations[target][model].through;
+			let tableName = this.associations[target][model][as].through;
 			let sourceCol = string.changeCase.snakeToCamel(model) + "Id";
 			let targetCol = string.changeCase.snakeToCamel(target) + "Id";
 			let targetTableName = inflection.pluralize(target);
@@ -263,7 +267,7 @@ class DBConnector extends ModelLoader {
 		}
 		else {
 			let entity = this.dbCore.getEntity(target);
-			let colName = string.changeCase.snakeToCamel(model) + "Id";
+			let colName = string.changeCase.snakeToCamel(as) + "Id";
 			let set = {};
 			let where = {};
 			switch (operation) {
@@ -282,8 +286,8 @@ class DBConnector extends ModelLoader {
 					break;
 				case "set":
 					return new Promise((resolve, reject) => {
-						this.associateEntryReversed(model, id, target, null, "clear").then((result) => {
-							this.associateEntryReversed(model, id, target, targetId, "add").then(resolve).catch(reject);
+						this.associateEntryReversed(model, id, target, null, as, "clear").then((result) => {
+							this.associateEntryReversed(model, id, target, targetId, as, "add").then(resolve).catch(reject);
 						}).catch(reject);
 					});
 				case "has":
@@ -320,7 +324,7 @@ class DBConnector extends ModelLoader {
 	 * plural - boolean (optional) - normally the singular is picked in case
 	 *          both forms are available, set this to true to pick plural
 	 */
-	associationFunctionName (fn, source, target, plural) {
+	associationFunctionName (fn, source, target, as, plural) {
 		let fallbacks = {
 			add: "set"
 		};
@@ -342,9 +346,13 @@ class DBConnector extends ModelLoader {
 				p: [ "get", "count", "has", "set", "add", "remove" ]
 			}
 		};
-		if (this.associations[source] === undefined || this.associations[source][target] === undefined)
-			throw new DBError("No association between " + source + " and " + target);
-		let type = this.associations[source][target].type;
+		if (!as)
+			as = target;
+		if (this.associations[source] === undefined)
+			throw new DBError("No associations registered for " + source);
+		if (this.associations[source][target] === undefined || this.associations[source][target][as] === undefined)
+			throw new DBError("No association between " + source + " and " + target + " as " + as);
+		let type = this.associations[source][target][as].type;
 		let isPlural;
 		let actualFn = fn;
 		// check if function name is valid at all, otherwise check for fallbacks
@@ -363,8 +371,8 @@ class DBConnector extends ModelLoader {
 		if (isPlural === undefined)
 			throw new DBError("No " + actualFn + " (" + fn + ") function for " + type + " association found");
 		if (isPlural)
-			target = inflection.pluralize(target);
-		return actualFn + target.slice(0, 1).toUpperCase() + target.slice(1);
+			as = inflection.pluralize(as);
+		return actualFn + as.slice(0, 1).toUpperCase() + as.slice(1);
 	}
 
 	/*
@@ -412,6 +420,7 @@ class DBConnector extends ModelLoader {
 			case "hasOne":
 			case "belongsTo":					// user, role
 				multiple = false;
+				target = as;
 				if (condition !== "")
 					condition = ' WHERE "' + sourceTable + '"."id"' + condition;
 				if (fullData)
@@ -425,6 +434,7 @@ class DBConnector extends ModelLoader {
 			case "hasOne reversed":
 			case "belongsTo reversed":			// role, user
 				multiple = true;
+				target = as;
 				if (condition !== "")
 					condition = ' WHERE "' + targetTable + '"."' + source + 'Id"' + condition;
 				if (fullData)
