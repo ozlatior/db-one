@@ -390,7 +390,7 @@ class DBGenerator extends ModelLoader {
 		let target = association.source;
 		let as = association.as;
 		if (!as)
-			as = target;
+			as = entity;
 		let tokens = {
 			__MODEL__: entity,
 			__MODELCC__: string.changeCase.snakeToCamel(entity, true),
