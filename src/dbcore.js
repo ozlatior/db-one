@@ -95,6 +95,18 @@ class DBCore {
 		return true;
 	}
 
+	authenticate () {
+		logger.info("Initialising Database force=" + (!!force), "initialise");
+		return new Promise((resolve, reject) => {
+			this.sql.authenticate().then(() => {
+				logger.info(
+					'Database connection to \'' + this.sql.config.host + '/' + this.sql.config.database + '\' successful',
+					"initialise");
+				resolve();
+			}).catch(reject);
+		});
+	}
+
 	initialise (force, modelCb, associationCb) {
 		logger.info("Initialising Database force=" + (!!force), "initialise");
 		return new Promise((resolve, reject) => {

@@ -23,6 +23,10 @@ class DBConnector extends ModelLoader {
 		this.addFunction("now", function() { return (new Date()); });
 	}
 
+	authenticate () {
+		return this.dbCore.authenticate();
+	}
+
 	addConstant (name, value) {
 		this.constants[name] = value;
 	}
