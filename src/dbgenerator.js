@@ -569,13 +569,24 @@ class DBGenerator extends ModelLoader {
 		]);
 		this.pushEmptyLine(ret);
 
-		this.pushCodeBlock(ret, [
-			'const DBSession = require("' + paths.src + 'dbsession.js");',
-			'',
-			'const DBError = require("' + paths.src + 'dberror.js");',
-			'',
-			'const logger = require("' + paths.src + 'logger.js").getInstance().moduleBinding("' + this.className + '", "db-one");'
-		]);
+		if (paths.asModule) {
+			this.pushCodeBlock(ret, [
+				'const DBSession = require("db-one").DBSession;',
+				'',
+				'const DBError = require("db-one").DBError;',
+				'',
+				'const logger = require("db-one").getInstance().moduleBinding("' + this.className + '", "db-one");'
+			]);
+		}
+		else {
+			this.pushCodeBlock(ret, [
+				'const DBSession = require("' + paths.src + 'dbsession.js");',
+				'',
+				'const DBError = require("' + paths.src + 'dberror.js");',
+				'',
+				'const logger = require("' + paths.src + 'logger.js").getInstance().moduleBinding("' + this.className + '", "db-one");'
+			]);
+		}
 		this.pushEmptyLine(ret);
 
 		this.pushCommentBlock(ret, [ this.className + " class declaration" ]);
