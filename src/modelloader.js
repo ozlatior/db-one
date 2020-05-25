@@ -206,10 +206,10 @@ class ModelLoader {
 		return (this.associations[source][target].loaded === true);
 	}
 
-	dbInit (force) {
-		logger.info("Setting up Database force=" + force, "dbInit");
+	createEntities () {
+		logger.info("Creating entities for new loaded models", "createEntities");
 		if (!this.dbCore)
-			throw new Error("No dbCore object specified, cannnot initialize database");
+			throw new Error("No dbCore object specified, cannnot initialize entities");
 		for (let i in this.models) {
 			if (this.models[i].loaded)
 				continue;
@@ -225,6 +225,13 @@ class ModelLoader {
 				}
 			}
 		}
+	}
+
+	dbInit (force) {
+		logger.info("Setting up Database force=" + force, "dbInit");
+		if (!this.dbCore)
+			throw new Error("No dbCore object specified, cannnot initialize database");
+		this.createEntities();
 		return new Promise((resolve, reject) => {
 			this.dbCore.initialise(force,
 				(model) => { this.models[model].loaded = true; },

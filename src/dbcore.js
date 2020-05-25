@@ -96,7 +96,7 @@ class DBCore {
 	}
 
 	authenticate () {
-		logger.info("Initialising Database force=" + (!!force), "initialise");
+		logger.info("Authenticating to database", "authenticate");
 		return new Promise((resolve, reject) => {
 			this.sql.authenticate().then(() => {
 				logger.info(
