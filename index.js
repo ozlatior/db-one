@@ -23,6 +23,9 @@ const AccessManager =			require("./src/access/accessmanager.js");
 const AccessManagerSession =	require("./src/access/session.js");
 const AccessManagerGenerator =	require("./src/access/generator.js");
 
+// default data
+const accessModels =		require("./models/access/models.js");
+
 //
 /*export {
 	DBConnector,
@@ -39,6 +42,14 @@ const AccessManagerGenerator =	require("./src/access/generator.js");
 	DBGeneratorError
 };*/
 
+const defaults = {
+
+	getAccessModels: function () {
+		return accessModels;
+	}
+
+}
+
 module.exports = {
 	AccessManager:			AccessManager,
 	AccessManagerSession:	AccessManagerSession,
@@ -53,5 +64,6 @@ module.exports = {
 	DocGenerator:			DocGenerator,
 	Hooks:					Hooks,
 	Logger:					Logger,
-	DBInit:					DBInit
+	DBInit:					DBInit,
+	defaults:				defaults
 };
