@@ -13,7 +13,6 @@
 
 const fs = require("fs");
 const path = require("path");
-const upath = require("util-one").path;
 
 const Sequelize = require("sequelize");
 
@@ -216,7 +215,70 @@ class DBEnv {
 
 	/*
 	 * Setup configured objects
+	 * TODO: additional objects and data
 	 */
+	configureContextConstants (context, constants) {
+		logger.info("Configuring constants for context " + context, "configureContextConstants");
+		Logger.expand(logger.detail, constants, "costants", "configureContextConstants");
+		if (!this.ctx[context])
+			throw new DBError("No such context " + context);
+		for (let i in constants)
+			this.ctx[context].getConnector().addConstant(i, constants[i])
+	}
+
+	configureContextFunctions (context, functions) {
+		logger.info("Configuring functions for context " + context, "configureContextFunctions");
+		Logger.expand(logger.detail, functions, "functions", "configureContextFunctions");
+		if (!this.ctx[context])
+			throw new DBError("No such context " + context);
+		for (let i in functions) {
+			let fun = null;
+			switch (functions[i].mode) {
+				case "module":
+					let requirePath = path.join(process.cwd(), functions[i].path);
+					requirePath = u1.path.getRelative(__dirname, requirePath);
+					fun = require(requirePath);
+					fun = u1.object.deepRead(fun, functions[i].key.split("."));
+					break;
+				default:
+					logger.error("Unknown mode " + functions[i].mode + " for function " + i);
+			}
+			if (fun === null)
+				continue;
+			this.ctx[context].getConnector().addFunction(i, fun);
+		}
+	}
+
+	loadConfiguredModels () {
+		for (let i in this.ctx) {
+			if (!this.config.contexts[i] || !this.config.contexts[i].models)
+				continue;
+			logger.info("Loading additional models for context " + i, "loadConfiguredModels");
+			let models = this.config.contexts[i].models;
+			for (let j=0; j<models.length; j++) {
+				let modelPath = path.join(process.cwd(), models[j]);
+				logger.info("  " + modelPath, "loadConfiguredModels");
+				let toLoad = require(modelPath);
+				this.loadModels(toLoad, i);
+			}
+		}
+	}
+
+	loadConfiguredData () {
+		for (let i in this.ctx) {
+			if (!this.config.contexts[i] || !this.config.contexts[i].data)
+				continue;
+			logger.info("Loading additional data for context " + i, "loadConfiguredData");
+			let data = this.config.contexts[i].data;
+			for (let j=0; j<data.length; j++) {
+				let dataPath = path.join(process.cwd(), data[j]);
+				logger.info("  " + dataPath, "loadConfiguredData");
+				let toLoad = require(dataPath);
+				this.loadData(toLoad, i);
+			}
+		}
+	}
+
 	createConfiguredObjects () {
 		logger.module("Creating configured objects", "createConfiguredObjects");
 		Logger.expand(logger.detail, this.config, "config", "createConfiguredObjects");
@@ -226,12 +288,15 @@ class DBEnv {
 			if (this.generator)
 				this.setDefaultGenerators();
 		}
+
+		logger.module("Loading configured models", "createConfiguredObjects");
 		if (this.config.defaultAccessModels || this.config.DEFAULT_ACCESS_MODELS) {
 			this.loadAccessModels(accessModels);
 		}
 		if (this.config.defaultUserModels || this.config.DEFAULT_USER_MODELS) {
 			this.loadUserModels(userModels);
 		}
+		this.loadConfiguredModels();
 
 		logger.module("Loading configured data", "createConfiguredObjects");
 		if (this.config.defaultAccessData || this.config.DEFAULT_ACCESS_DATA) {
@@ -239,6 +304,17 @@ class DBEnv {
 		}
 		if (this.config.defaultUserData || this.config.DEFAULT_USER_DATA) {
 			this.loadData(userData);
+		}
+		this.loadConfiguredData();
+
+		logger.module("Applying additional configurations", "createConfiguredObjects");
+		for (let i in this.ctx) {
+			if (!this.config.contexts[i])
+				continue;
+			if (this.config.contexts[i].constants)
+				this.configureContextConstants(i, this.config.contexts[i].constants);
+			if (this.config.contexts[i].functions)
+				this.configureContextFunctions(i, this.config.contexts[i].functions);
 		}
 	}
 
@@ -330,7 +406,7 @@ class DBEnv {
 			}
 			if (config.mode === "static") {
 				let classPath = path.join(process.cwd(), config.path);
-				let relative = upath.getRelative(__dirname, classPath);
+				let relative = u1.path.getRelative(__dirname, classPath);
 				let cls = require(relative);
 				this.ctx[i].setSessionClass(cls);
 			}

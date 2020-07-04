@@ -50,6 +50,10 @@ module.exports = {
 	//   - "static": use a static file that has been generated at runtime or written beforehand
 	// - factory.className: class name used by the factory
 	// - factory.path: path to class to use (can be the generated path, a user file or an inherited class)
+	// - functions: key-value list of functions
+	// - functions.<name>.mode: loading mode for function (only "module" allowed in current version)
+	// - functions.<name>.path: for "module", the require path for the function definition
+	// - functions.<name>.key: for "module", the key in the required object where the function is located
 
 	contexts: {
 
@@ -63,6 +67,16 @@ module.exports = {
 			factory: {
 				mode: "runtime",
 				className: "GeneratedSystemSession"
+			},
+			functions: {
+				password: {
+					mode: "module",
+					path: "./src/access/password.js",
+					key: "password1.get"
+				}
+			},
+			constants: {
+				staticSalt: "11111111222222223333333344444444"
 			}
 		},
 
