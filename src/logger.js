@@ -5,6 +5,7 @@
 const colors = require("colors");
 
 const string = require("util-one").string;
+const object = require("util-one").object;
 
 class Logger {
 
@@ -204,6 +205,31 @@ class Logger {
 	}
 
 }
+
+// static functions
+
+/*
+ * Expand object properties and log them using specified function
+ */
+Logger.expand = function (fn, obj, name, cls, service, id) {
+	object.map(obj, (path, value) => {
+		if (value === undefined)
+			return;
+		fn("  " + name + "." + path.join(".") + ": " + JSON.stringify(value), cls, service, id);
+	});
+}
+
+/*
+ * Map an int bitmap to int values as specified in object
+ */
+Logger.mapInt = function (fn, value, obj, name, cls, service, id) {
+	for (let i in obj) {
+		if (typeof(obj[i]) !== "number" || obj[i] === 0 || obj[i] !== parseInt(obj[i]))
+			continue;
+		fn("  " + name + "." + i + ": " + ((value & obj[i]) === obj[i]), cls, service, id);
+	}
+}
+
 
 // singleton instance
 let instance = null;
