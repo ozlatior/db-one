@@ -69,11 +69,19 @@ class DBSessionFactory {
 		return this.sessionModel;
 	}
 
+	getSessionModelName () {
+		return this.sessionModel.name;
+	}
+
 	setSessionModel (modelDefinition) {
 		logger.info("Setting Session Model to " + JSON.stringify(modelDefinition), "setOwnerModel");
 		this.sessionModel = modelDefinition;
 		this.dbConnector.setOwnerModel(this.getOwnerModel());
 		DBSession.modelName = this.sessionModel.name;
+	}
+
+	setSessionModelName (name) {
+		this.sessionModel.name = name;
 	}
 
 	getOwnerModel () {
@@ -184,5 +192,7 @@ class DBSessionFactory {
 	}
 
 }
+
+DBSessionFactory.SESSION_MODEL = SESSION_MODEL;
 
 module.exports = DBSessionFactory;
