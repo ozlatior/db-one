@@ -1,3 +1,5 @@
+cp -rf node_modules _node_modules_backup
+
 npm install
 
 mkdir node_modules
