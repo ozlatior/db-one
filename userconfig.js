@@ -84,11 +84,9 @@ module.exports = {
 			models: null,
 			data: null,
 			generator: {
-//				mode: "runtime",
 				mode: "startup",
 				className: "GeneratedAccessSession",
-				codePaths: { src: "../src/" }
-//				codePaths: { asModule: true }
+				codePaths: { asModule: true }
 			},
 			factory: {
 				mode: "static",
@@ -101,11 +99,9 @@ module.exports = {
 			models: null,
 			data: null,
 			generator: {
-//				mode: "runtime",
 				mode: "startup",
 				className: "GeneratedUserSession",
-				codePaths: { src: "../src/" }
-//				codePaths: { asModule: true }
+				codePaths: { asModule: true }
 			},
 			factory: {
 				mode: "static",
