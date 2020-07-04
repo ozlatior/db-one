@@ -1,5 +1,12 @@
 // main exports file
 
+// environment and contexts
+const DBEnv =				require("./src/dbenv.js");
+const DBContext =			require("./src/dbcontext.js");
+const DBInitContext =		require("./src/dbinitcontext.js");
+const DBLiveContext =		require("./src/dblivecontext.js");
+const DBGeneratorContext =	require("./src/dbgeneratorcontext");
+
 // main components
 const DBConnector =			require("./src/dbconnector.js");
 const DBCore =				require("./src/dbcore.js");
@@ -16,8 +23,6 @@ const Hooks =				require("./src/hooks.js");
 
 const Logger =				require("./src/logger.js");
 
-const DBInit =				require("./src/dbinit.js");
-
 // access classes
 const AccessManager =			require("./src/access/accessmanager.js");
 const AccessManagerSession =	require("./src/access/session.js");
@@ -25,27 +30,38 @@ const AccessManagerGenerator =	require("./src/access/generator.js");
 
 // default data
 const accessModels =		require("./models/access/models.js");
+const accessData =			require("./data/access/data.js");
+const userModels =			require("./models/models.js");
+const userData =			require("./models/data.js");
 
-//
-/*export {
-	DBConnector,
-	DBCore,
-	DBGenerator,
-	DBSession,
-	DBSessionFactory,
-	DataLoader,
-	ModelLoader,
-	DocGenerator,
-	Hooks,
-	Logger,
-	DBError,
-	DBGeneratorError
-};*/
+// default configs
+const defaultConfig =		require("./defaultconfig.js");
+const userConfig =			require("./userconfig.js");
 
 const defaults = {
 
 	getAccessModels: function () {
 		return accessModels;
+	},
+
+	getAccessData: function () {
+		return accessData;
+	},
+
+	getUserModesl: function () {
+		return userModels;
+	},
+
+	getUserData: function () {
+		return userData;
+	},
+
+	getDefaultConfig: function () {
+		return defaultConfig;
+	},
+
+	getUserConfig: function () {
+		return userConfig;
 	}
 
 }
@@ -54,6 +70,11 @@ module.exports = {
 	AccessManager:			AccessManager,
 	AccessManagerSession:	AccessManagerSession,
 	AccessManagerGenerator:	AccessManagerGenerator,
+	DBEnv:					DBEnv,
+	DBContext:				DBContext,
+	DBInitContext:			DBInitContext,
+	DBLiveContext:			DBLiveContext,
+	DBGeneratorContext:		DBGeneratorContext,
 	DBConnector:			DBConnector,
 	DBCore:					DBCore,
 	DBGenerator:			DBGenerator,
@@ -64,6 +85,5 @@ module.exports = {
 	DocGenerator:			DocGenerator,
 	Hooks:					Hooks,
 	Logger:					Logger,
-	DBInit:					DBInit,
 	defaults:				defaults
 };
