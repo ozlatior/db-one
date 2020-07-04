@@ -53,7 +53,7 @@ class DBInit {
 
 	loadData (data) {
 		logger.module("Loading data", "loadData");
-		for (let i in accessData) {
+		for (let i in data) {
 			this.dataLoader.loadData(i, data[i]);
 		}
 	}
