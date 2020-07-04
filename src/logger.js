@@ -215,8 +215,15 @@ Logger.expand = function (fn, obj, name, cls, service, id) {
 	object.map(obj, (path, value) => {
 		if (value === undefined)
 			return;
-		fn("  " + name + "." + path.join(".") + ": " + JSON.stringify(value), cls, service, id);
-	});
+		let str = "";
+		if (value instanceof Array)
+			str = "[ Array ]";
+		else if (value === "[ Object ]")
+			str = "[ Object ]";
+		else
+			str = JSON.stringify(value);
+		fn("  " + name + "." + path.join(".") + ": " + str, cls, service, id);
+	}, 3);
 }
 
 /*
