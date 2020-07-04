@@ -28,6 +28,7 @@ class DBConnector extends ModelLoader {
 	}
 
 	addConstant (name, value) {
+		logger.info("Adding constant " + name + " = " + value, "addConstant");
 		this.constants[name] = value;
 	}
 
@@ -57,6 +58,8 @@ class DBConnector extends ModelLoader {
 				args[i] = value;
 			}
 		}
+		if (!(this.functions[name] instanceof Function))
+			throw new DBError("No such function " + name);
 		return this.functions[name].apply(null, args);
 	}
 

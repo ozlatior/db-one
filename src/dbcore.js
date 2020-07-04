@@ -72,7 +72,7 @@ class DBCore {
 		if (sourceEntity === undefined)
 			throw new DBError("Source entity " + source + " not found");
 		if (targetEntity === undefined)
-			throw new DBError("Target entity " + source + " not found");
+			throw new DBError("Target entity " + target + " not found");
 		switch (type) {
 			case 'hasOne':
 				sourceEntity.hasOne(targetEntity, options);
