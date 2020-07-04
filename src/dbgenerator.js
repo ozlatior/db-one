@@ -575,7 +575,7 @@ class DBGenerator extends ModelLoader {
 				'',
 				'const DBError = require("db-one").DBError;',
 				'',
-				'const logger = require("db-one").getInstance().moduleBinding("' + this.className + '", "db-one");'
+				'const logger = require("db-one").Logger.getInstance().moduleBinding("' + this.className + '", "db-one");'
 			]);
 		}
 		else {
