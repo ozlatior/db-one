@@ -5,11 +5,12 @@
 		"test": "mocha"
 	},
 	"dependencies": {
-		"colors": "*",
+		"logger-one-js": "*",
 		"mocha": "*",
 		"pg": "*",
 		"pg-promise": "*",
 		"pgsql-parser": "*",
-		"sequelize": "*"
+		"sequelize": "*",
+		"util-one": "*"
 	}
 }
